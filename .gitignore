@@ -1,0 +1,22 @@
+# Firebase service account
+/flask_api/app/utils/serviceAccountKey.json
+# Eğer Flutter tarafında da environment dosyası varsa
+/lib/src/utils/.env
+/lib/src/config.dart
+
+# Genel şifre/anahtar dosyaları
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+
+# iOS GoogleService info (eğer hassassa)
+/ios/Runner/GoogleService-Info.plist
+
+# Android keystore (eğer varsa)
+/android/app/upload-keystore.jks
+
+# Eğer .env gibi dosyalarınız varsa root’ta
+.env
+env.dart
