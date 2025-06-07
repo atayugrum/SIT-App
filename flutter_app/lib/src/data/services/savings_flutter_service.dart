@@ -1,74 +1,69 @@
-// File: flutter_app/lib/src/data/services/savings_flutter_service.dart
+// File: lib/src/data/services/savings_flutter_service.dart
+
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart'; // For DateFormat in addManualSaving
+import 'package:intl/intl.dart'; 
 
-import '../../presentation/providers/auth_providers.dart'; // To get current user's UID
+import '../../presentation/providers/auth_providers.dart'; 
 import '../models/savings_allocation_model.dart'; 
 import '../models/savings_balance_model.dart'; 
+import '../models/savings_goal_model.dart';
 
 class SavingsFlutterService {
-  static const String _flaskApiBaseUrl = 'http://10.0.2.2:5000'; // Android Emulator default
-  // For iOS Simulator: static const String _flaskApiBaseUrl = 'http://localhost:5000';
-  // For Web or physical device on same network: static const String _flaskApiBaseUrl = 'http://YOUR_COMPUTER_IP:5000';
+  // Geliştirme ortamınıza göre bu adresi değiştirmeyi unutmayın
+  static const String _flaskApiBaseUrl = 'http://10.0.2.2:5000'; // Android Emulator
   final Ref _ref;
 
   SavingsFlutterService(this._ref);
 
+  // Anlık olarak kullanıcı ID'sini alan yardımcı getter
+  String? get _userId => _ref.read(currentUserProvider)?.uid;
+
+  // Tekrarlanan hata yönetimini basitleştiren yardımcı fonksiyon
+  void _handleErrorResponse(http.Response response, String context) {
+    final errorData = jsonDecode(response.body);
+    print("SAVINGS_FLUTTER_SERVICE: Error in $context - ${response.statusCode}: ${response.body}");
+    throw Exception('Failed to $context: ${errorData['error'] ?? response.reasonPhrase}');
+  }
+
   Future<SavingsBalanceModel> getSavingsBalance() async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
-      throw Exception("User not logged in. Cannot fetch savings balance.");
-    }
-    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/balance').replace(queryParameters: {'userId': currentUser.uid});
+    if (_userId == null) throw Exception("User not logged in. Cannot fetch savings balance.");
+
+    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/balance').replace(queryParameters: {'userId': _userId});
     print("SAVINGS_FLUTTER_SERVICE: Fetching savings balance from $url");
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
-      print("SAVINGS_FLUTTER_SERVICE: Balance response status: ${response.statusCode}");
-
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true) {
           return SavingsBalanceModel.fromMap(responseData);
         } else {
-          throw Exception(responseData['error'] ?? 'Failed to fetch savings balance: Unexpected API response.');
+          throw Exception(responseData['error'] ?? 'Failed to fetch savings balance.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
-        print("SAVINGS_FLUTTER_SERVICE: Error fetching balance - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to fetch savings balance: ${errorData['error'] ?? response.reasonPhrase}');
+        _handleErrorResponse(response, 'fetch savings balance');
+        throw Exception("Server error while fetching balance."); // Fallback
       }
-    } catch (e, s) {
-      print("SAVINGS_FLUTTER_SERVICE: Exception during getSavingsBalance: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is API server running and accessible?');
-      }
+    } catch (e) {
+      print("SAVINGS_FLUTTER_SERVICE: Exception during getSavingsBalance: $e");
       rethrow;
     }
   }
 
   Future<List<SavingsAllocationModel>> listSavingsAllocations({String? startDate, String? endDate, String? source}) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
-      print("SAVINGS_FLUTTER_SERVICE: User not logged in for listSavingsAllocations.");
-      return [];
-    }
+    if (_userId == null) return [];
 
-    final Map<String, String> queryParams = {'userId': currentUser.uid};
+    final Map<String, String> queryParams = {'userId': _userId!};
     if (startDate != null) queryParams['startDate'] = startDate;
     if (endDate != null) queryParams['endDate'] = endDate;
     if (source != null) queryParams['source'] = source;
 
     final url = Uri.parse('$_flaskApiBaseUrl/api/savings/allocations').replace(queryParameters: queryParams);
-    print("SAVINGS_FLUTTER_SERVICE: Listing savings allocations from $url");
-
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
-      print("SAVINGS_FLUTTER_SERVICE: Allocations list response status: ${response.statusCode}");
-
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true && responseData.containsKey('allocations')) {
@@ -77,68 +72,103 @@ class SavingsFlutterService {
               .map((data) => SavingsAllocationModel.fromMap(data as Map<String, dynamic>))
               .toList();
         } else {
-          throw Exception(responseData['error'] ?? 'Failed to list savings allocations: Unexpected API response.');
+          throw Exception(responseData['error'] ?? 'Failed to list allocations.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
-        print("SAVINGS_FLUTTER_SERVICE: Error listing allocations - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to list savings allocations: ${errorData['error'] ?? response.reasonPhrase}');
+        _handleErrorResponse(response, 'list allocations');
+        return []; // Fallback
       }
-    } catch (e, s) {
-      print("SAVINGS_FLUTTER_SERVICE: Exception during listSavingsAllocations: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is API server running and accessible?');
-      }
+    } catch (e) {
       rethrow;
     }
   }
 
   Future<void> addManualSaving({required double amount, required DateTime date}) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
-      throw Exception("User not logged in. Cannot add manual saving.");
-    }
+    if (_userId == null) throw Exception("User not logged in.");
 
-    final DateFormat formatter = DateFormat('yyyy-MM-dd');
-    final String formattedDate = formatter.format(date);
-
-    final Map<String, dynamic> payload = {
-      'userId': currentUser.uid, 
+    final payload = {
+      'userId': _userId, 
       'amount': amount,
-      'date': formattedDate,
+      'date': DateFormat('yyyy-MM-dd').format(date),
     };
 
     final url = Uri.parse('$_flaskApiBaseUrl/api/savings/allocations');
-    print("SAVINGS_FLUTTER_SERVICE: Adding manual saving at $url with data: ${jsonEncode(payload)}");
-    
     try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 10));
-
-      print("SAVINGS_FLUTTER_SERVICE: Add manual saving response status: ${response.statusCode}");
-
-      if (response.statusCode == 201) { 
-        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
-        if (responseData['success'] == true) {
-          print("SAVINGS_FLUTTER_SERVICE: Manual saving added successfully.");
-          return;
-        } else {
-          throw Exception(responseData['error'] ?? 'Failed to add manual saving: Unexpected API response.');
-        }
-      } else {
-        final errorData = jsonDecode(response.body);
-        print("SAVINGS_FLUTTER_SERVICE: Error adding manual saving - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to add manual saving: ${errorData['error'] ?? response.reasonPhrase}');
+      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload));
+      if (response.statusCode != 201) {
+        _handleErrorResponse(response, 'add manual saving');
       }
-    } catch (e, s) {
-      print("SAVINGS_FLUTTER_SERVICE: Exception during addManualSaving: $e\n$s");
-        if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is API server running?');
-      }
+    } catch (e) {
       rethrow;
     }
+  }
+
+  // === YENİ HEDEF METOTLARI ===
+
+  Future<List<SavingsGoalModel>> listGoals() async {
+    if (_userId == null) throw Exception("User not logged in.");
+    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals').replace(queryParameters: {'userId': _userId});
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> goalsData = data['goals'];
+          return goalsData.map((d) => SavingsGoalModel.fromMap(d)).toList();
+        } else {
+          throw Exception(data['error'] ?? 'Failed to list goals.');
+        }
+      } else {
+        _handleErrorResponse(response, 'list goals');
+        return [];
+      }
+    } catch(e) { rethrow; }
+  }
+
+  Future<SavingsGoalModel> createGoal({required String title, required double targetAmount, required DateTime targetDate}) async {
+    if (_userId == null) throw Exception("User not logged in.");
+    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals');
+    final payload = jsonEncode({
+      'userId': _userId,
+      'title': title,
+      'targetAmount': targetAmount,
+      'targetDate': DateFormat('yyyy-MM-dd').format(targetDate),
+    });
+    
+    try {
+      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: payload);
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return SavingsGoalModel.fromMap(data['goal']);
+      } else {
+        _handleErrorResponse(response, 'create goal');
+        throw Exception('Failed to create goal.');
+      }
+    } catch(e) { rethrow; }
+  }
+
+  Future<void> deleteGoal(String goalId) async {
+    if (_userId == null) throw Exception("User not logged in.");
+    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals/$goalId').replace(queryParameters: {'userId': _userId});
+    
+    try {
+      final response = await http.delete(url);
+      if (response.statusCode != 200) {
+        _handleErrorResponse(response, 'delete goal');
+      }
+    } catch(e) { rethrow; }
+  }
+
+  Future<void> allocateToGoal({required String goalId, required double amount}) async {
+    if (_userId == null) throw Exception("User not logged in.");
+    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals/$goalId/allocate');
+    final payload = jsonEncode({'userId': _userId, 'amount': amount});
+
+    try {
+      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: payload);
+      if (response.statusCode != 200) {
+        _handleErrorResponse(response, 'allocate funds to goal');
+      }
+    } catch(e) { rethrow; }
   }
 }

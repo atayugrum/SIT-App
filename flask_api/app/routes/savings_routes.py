@@ -1,6 +1,6 @@
 # File: flask_api/app/routes/savings_routes.py
 from flask import Blueprint, request, jsonify
-from app.services.savings_service import SavingsService
+from app.services.savings_service import SavingsService, InsufficientFundsError
 import traceback
 from datetime import datetime, timezone
 
@@ -12,12 +12,10 @@ def get_savings_balance_route():
     if not user_id:
         return jsonify({"success": False, "error": "Missing userId query parameter"}), 400
 
-    print(f"GET /api/savings/balance for userId: {user_id}")
     try:
         result = SavingsService.get_user_savings_balance(user_id)
-        return jsonify(result), 200 # Result already contains success flag
+        return jsonify(result), 200
     except Exception as e:
-        print(f"Unhandled exception in get_savings_balance_route for {user_id}: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
 
@@ -31,22 +29,20 @@ def list_savings_allocations_route():
     end_date_str = request.args.get('endDate')   
     source_filter = request.args.get('source') 
 
-    print(f"GET /api/savings/allocations for userId: {user_id}, start: {start_date_str}, end: {end_date_str}, source: {source_filter}")
     try:
         result = SavingsService.get_user_savings_allocations(user_id, start_date_str, end_date_str, source_filter)
-        return jsonify(result), 200 # Result already contains success flag
+        return jsonify(result), 200
     except Exception as e:
-        print(f"Unhandled exception in list_savings_allocations_route for {user_id}: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
 
-@savings_bp.route('/allocations', methods=['POST']) # For manual savings
+@savings_bp.route('/allocations', methods=['POST'])
 def add_manual_savings_allocation_route():
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "error": "No data provided"}), 400
 
-    user_id = data.get('userId') # In real app, get from auth token
+    user_id = data.get('userId')
     amount_raw = data.get('amount')
     date_str = data.get('date', datetime.now(timezone.utc).strftime('%Y-%m-%d'))
 
@@ -55,11 +51,6 @@ def add_manual_savings_allocation_route():
 
     try:
         amount_float = float(amount_raw)
-    except ValueError:
-        return jsonify({"success": False, "error": "Invalid amount format"}), 400
-
-    print(f"POST /api/savings/allocations (manual) for user {user_id}, amount {amount_float}, date {date_str}")
-    try:
         result = SavingsService.create_savings_allocation(
             user_id, 
             transaction_id=None, 
@@ -70,9 +61,57 @@ def add_manual_savings_allocation_route():
         if result.get("success"):
             return jsonify(result), 201 
         else:
-            # If service method itself returns success:false, it might include a status code
             return jsonify(result), result.get("status_code", 400)
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid amount format"}), 400
     except Exception as e:
-        print(f"Unhandled exception in add_manual_savings_allocation_route: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
+
+# =========================================================
+# TASARRUF HEDEFLERİ ROTALARI
+# =========================================================
+
+@savings_bp.route('/goals', methods=['POST'])
+def create_goal_route():
+    data = request.get_json()
+    if not data or 'userId' not in data:
+        return jsonify({"success": False, "error": "Missing data or userId"}), 400
+    
+    result, status_code = SavingsService.create_goal(data)
+    return jsonify(result), status_code
+
+@savings_bp.route('/goals', methods=['GET'])
+def list_goals_route():
+    user_id = request.args.get('userId')
+    if not user_id:
+        return jsonify({"success": False, "error": "Missing userId query parameter"}), 400
+    
+    result, status_code = SavingsService.list_goals(user_id)
+    return jsonify(result), status_code
+
+@savings_bp.route('/goals/<goal_id>', methods=['DELETE'])
+def delete_goal_route(goal_id):
+    user_id = request.args.get('userId') # Auth token'dan alınmalı
+    if not user_id:
+        return jsonify({"success": False, "error": "Missing userId for authorization"}), 400
+
+    result, status_code = SavingsService.delete_goal(user_id, goal_id)
+    return jsonify(result), status_code
+
+@savings_bp.route('/goals/<goal_id>/allocate', methods=['POST'])
+def allocate_to_goal_route(goal_id):
+    data = request.get_json()
+    user_id = data.get('userId') # Auth token'dan alınmalı
+    amount = data.get('amount')
+    
+    if not user_id or not amount:
+        return jsonify({"success": False, "error": "Missing userId or amount"}), 400
+    
+    try:
+        result, status_code = SavingsService.allocate_to_goal(user_id, goal_id, float(amount))
+        return jsonify(result), status_code
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid amount format"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": f"An unexpected error occurred: {str(e)}"}), 500

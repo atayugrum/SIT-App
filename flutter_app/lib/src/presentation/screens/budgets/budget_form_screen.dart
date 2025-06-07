@@ -1,14 +1,16 @@
 // File: lib/src/presentation/screens/budgets/budget_form_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../data/models/budget_model.dart';
+import '../../../data/models/budget_suggestion_model.dart'; // YENİ: AI Öneri modeli
 import '../../providers/budget_providers.dart';
-// import '../../providers/category_providers.dart'; // Artık doğrudan izlemiyoruz, kategorileri expenseCategories'den alacağız
-// import '../../../data/models/user_category_model.dart'; // Kaldırıldı
-import '../../../core/categories.dart'; // Önceden tanımlanmış kategoriler için
+import '../../providers/ai_providers.dart'; // YENİ: AI provider'ları
+import '../../../core/categories.dart'; 
+// import '../../providers/auth_providers.dart'; // YENİ: Kullanıcı ID'si için bu veya benzeri bir provider'a ihtiyacınız olacak
 
 class BudgetFormScreen extends ConsumerStatefulWidget {
   final BudgetModel? budgetToEdit;
@@ -23,28 +25,17 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _limitAmountController;
   String? _selectedCategory;
-  // _selectedPeriod, bütçenin hangi yıl ve ay için olduğunu tutar.
-  late DateTime _selectedPeriod; 
+  late DateTime _selectedPeriod;
+
+  bool _isFetchingSuggestion = false; // YENİ: AI önerisi alınırken bekleme durumunu yönetmek için
 
   bool get _isEditMode => widget.budgetToEdit != null;
 
-  // Bütçe için kullanılabilir kategorileri (şimdilik sadece harcama) birleştir
   List<String> _getAvailableExpenseCategories(WidgetRef ref) {
     final predefined = List<String>.from(expenseCategories.keys);
-    // final customAsync = ref.watch(expenseCustomCategoriesProvider); // Dinamik yükleme için izle
-    // customAsync.whenData((customList) {
-    //   for (var catModel in customList) {
-    //     if (!predefined.contains(catModel.categoryName) && !catModel.isArchived) {
-    //       predefined.add(catModel.categoryName);
-    //     }
-    //   }
-    // });
-    // Şimdilik sadece predefined kullanalım, asyncCustomCategories senkronizasyonu zorlaştırıyor.
-    // TODO: Custom kategorileri de senkron ve düzgün bir şekilde buraya dahil et.
     predefined.sort();
     return predefined;
   }
-
 
   @override
   void initState() {
@@ -57,8 +48,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
       _limitAmountController.text = budget.limitAmount.toStringAsFixed(0);
       _selectedPeriod = DateTime(budget.year, budget.month);
     } else {
-      // Yeni bütçe için, BudgetOverviewScreen'deki seçili periyodu veya varsayılanı al
-      _selectedPeriod = ref.read(budgetPeriodProvider); 
+      _selectedPeriod = ref.read(budgetPeriodProvider);
     }
   }
 
@@ -70,7 +60,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
 
   Future<void> _pickPeriod(BuildContext context) async {
     final DateTime initialDateForYearPicker = _selectedPeriod;
-    
+
     final DateTime? pickedYear = await showDatePicker(
       context: context,
       initialDate: initialDateForYearPicker,
@@ -81,29 +71,110 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
     );
 
     if (pickedYear != null && mounted) {
-      final DateTime initialDateForMonthPicker = DateTime(pickedYear.year, _selectedPeriod.month);
-      
+      final DateTime initialDateForMonthPicker =
+          DateTime(pickedYear.year, _selectedPeriod.month);
+
       final DateTime? pickedMonth = await showDatePicker(
-          context: context,
-          initialDate: initialDateForMonthPicker,
-          firstDate: DateTime(pickedYear.year, 1),
-          lastDate: DateTime(pickedYear.year, 12),
-          initialEntryMode: DatePickerEntryMode.input,
-          fieldLabelText: 'Month (1-12)',
-          fieldHintText: 'MM',
-          helpText: 'SELECT BUDGET MONTH',
+        context: context,
+        initialDate: initialDateForMonthPicker,
+        firstDate: DateTime(pickedYear.year, 1),
+        lastDate: DateTime(pickedYear.year, 12),
+        initialEntryMode: DatePickerEntryMode.input,
+        fieldLabelText: 'Month (1-12)',
+        fieldHintText: 'MM',
+        helpText: 'SELECT BUDGET MONTH',
       );
-        
+
       if (pickedMonth != null && mounted) {
-          setState(() {
-              _selectedPeriod = DateTime(pickedYear.year, pickedMonth.month);
-          });
+        setState(() {
+          _selectedPeriod = DateTime(pickedYear.year, pickedMonth.month);
+        });
       }
     }
   }
 
+  // YENİ: AI Önerisini alma ve gösterme fonksiyonu
+  Future<void> _getAISuggestion() async {
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Lütfen önce bir kategori seçin.'),
+            backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    setState(() {
+      _isFetchingSuggestion = true;
+    });
+
+    try {
+      // Not: `budgetSuggestionProvider` provider'ı içindeki `userId` alanını kendi projenizdeki
+      // auth provider'ından (örn: ref.read(authProvider).currentUser!.id) alacak şekilde düzenlemelisiniz.
+      final suggestion =
+          await ref.read(budgetSuggestionProvider(_selectedCategory!).future);
+
+      if (suggestion.suggestedBudget > 0) {
+        _showSuggestionDialog(suggestion);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(suggestion.rationale),
+                backgroundColor: Colors.blueGrey),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Hata: ${e.toString().replaceFirst("Exception: ", "")}'),
+              backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFetchingSuggestion = false;
+        });
+      }
+    }
+  }
+
+  // YENİ: AI Önerisini gösteren dialog
+  void _showSuggestionDialog(BudgetSuggestion suggestion) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.lightbulb_outline, color: Colors.orangeAccent),
+            SizedBox(width: 8),
+            Text('Yapay Zeka Önerisi'),
+          ],
+        ),
+        content: Text(suggestion.rationale),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _limitAmountController.text =
+                  suggestion.suggestedBudget.toStringAsFixed(0);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Uygula'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _saveBudget() async {
+    // ... (Mevcut _saveBudget fonksiyonu içeriği burada kalacak, değişiklik yok)
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -129,7 +200,6 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
 
     final budgetNotifier = ref.read(budgetNotifierProvider.notifier);
     
-    // Check if a budget for this category and period already exists (only for create mode)
     if (!_isEditMode) {
         final existingBudgetsAsync = ref.read(budgetsProvider);
         if (existingBudgetsAsync.hasValue) {
@@ -157,13 +227,12 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
         limitAmount: limitAmount,
         year: _selectedPeriod.year,
         month: _selectedPeriod.month,
-        // isAuto: _isEditMode ? widget.budgetToEdit!.isAuto : false, // Backend upsert'ü isAuto'yu false yapar
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Budget ${_isEditMode ? "updated" : "saved"} successfully!'), backgroundColor: Colors.green),
         );
-        Navigator.of(context).pop(true); // Başarı durumunu bir önceki ekrana bildir
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       if (mounted) {
@@ -177,14 +246,9 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Get available categories (predefined expense + custom expense)
-    // Note: This approach for custom categories list might not be perfectly reactive if custom categories are added while this form is open.
-    // A better approach would be to watch a combined provider. For now, it fetches once.
     final List<String> availableCategories = _getAvailableExpenseCategories(ref);
-
-
     final budgetOperationState = ref.watch(budgetNotifierProvider);
-    final isLoading = budgetOperationState is AsyncLoading;
+    final isSaving = budgetOperationState is AsyncLoading;
 
     return Scaffold(
       appBar: AppBar(
@@ -197,6 +261,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              // ... (Mevcut Period ve Category alanları burada)
               Text('Budget For:', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -237,6 +302,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
               ),
               const SizedBox(height: 20),
 
+
               Text('Limit Amount:', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               TextFormField(
@@ -259,10 +325,31 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
                   return null;
                 },
               ),
+              const SizedBox(height: 16),
+
+              // YENİ BUTON VE LOGIC
+              if (!_isEditMode) // AI önerisini sadece yeni bütçe eklerken gösterelim
+                _isFetchingSuggestion
+                  ? const Center(child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: CircularProgressIndicator(),
+                    ))
+                  : OutlinedButton.icon(
+                      onPressed: _getAISuggestion,
+                      icon: const Icon(Icons.lightbulb_outline, color: Colors.orangeAccent),
+                      label: const Text('Get AI Suggestion'),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.orangeAccent),
+                        foregroundColor: Colors.orangeAccent.shade700,
+                        padding: const EdgeInsets.symmetric(vertical: 12)
+                      ),
+                    ),
+
+
               const SizedBox(height: 32),
               ElevatedButton.icon(
-                icon: isLoading 
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
+                icon: isSaving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.save_alt_outlined),
                 label: Text(_isEditMode ? 'Update Budget' : 'Save Budget'),
                 style: ElevatedButton.styleFrom(
@@ -272,7 +359,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
                   textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)
                 ),
-                onPressed: isLoading ? null : _saveBudget,
+                onPressed: isSaving ? null : _saveBudget,
               ),
             ],
           ),
