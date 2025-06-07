@@ -1,26 +1,25 @@
-// File: flutter_app/lib/src/presentation/providers/savings_providers.dart
+// File: lib/src/presentation/providers/savings_providers.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart'; // Used by SavingsAllocationsNotifier
+import 'package:intl/intl.dart';
 import '../../data/models/savings_allocation_model.dart';
 import '../../data/models/savings_balance_model.dart';
-import '../../data/services/savings_flutter_service.dart'; // Corrected import path
-import 'account_providers.dart'; // For refreshing accountsProvider
+import '../../data/models/savings_goal_model.dart';
+import '../../data/services/savings_flutter_service.dart';
+import 'account_providers.dart';
 
-// Provider for SavingsFlutterService
+// Servis provider'ı
 final savingsFlutterServiceProvider = Provider<SavingsFlutterService>((ref) {
   return SavingsFlutterService(ref);
 });
 
-// Provider for fetching the total savings balance
-final savingsBalanceProvider = FutureProvider<SavingsBalanceModel>((ref) async {
-  print("SAVINGS_BALANCE_PROVIDER: Fetching total savings balance...");
+// Toplam kumbara bakiyesini getiren provider
+final savingsBalanceProvider = FutureProvider.autoDispose<SavingsBalanceModel>((ref) async {
   final service = ref.watch(savingsFlutterServiceProvider);
-  final balance = await service.getSavingsBalance();
-  print("SAVINGS_BALANCE_PROVIDER: Balance fetched: ${balance.balance}");
-  return balance;
+  return service.getSavingsBalance();
 });
 
-// State class for SavingsAllocations
+// Kumbara hareketlerini (allocations) yöneten notifier ve state'i
 class SavingsAllocationsState {
   final List<SavingsAllocationModel> allocations;
   final bool isLoading;
@@ -63,7 +62,7 @@ class SavingsAllocationsNotifier extends StateNotifier<SavingsAllocationsState> 
   final Ref _ref;
 
   SavingsAllocationsNotifier(this._service, this._ref) : super(SavingsAllocationsState(
-    startDate: DateTime.now().subtract(const Duration(days: 29)), // Default to last 30 days
+    startDate: DateTime.now().subtract(const Duration(days: 29)),
     endDate: DateTime.now(),
   )) {
     fetchAllocations(); 
@@ -73,38 +72,26 @@ class SavingsAllocationsNotifier extends StateNotifier<SavingsAllocationsState> 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final DateFormat formatter = DateFormat('yyyy-MM-dd');
-      print("SAVINGS_ALLOC_NOTIFIER: Fetching allocations for ${formatter.format(state.startDate)} to ${formatter.format(state.endDate)}, source: ${state.filterSource}");
       final allocations = await _service.listSavingsAllocations(
         startDate: formatter.format(state.startDate),
         endDate: formatter.format(state.endDate),
         source: state.filterSource,
       );
       state = state.copyWith(allocations: allocations, isLoading: false);
-      print("SAVINGS_ALLOC_NOTIFIER: Allocations fetched successfully, count: ${allocations.length}");
-    } catch (e, s) {
-      print("SAVINGS_ALLOC_NOTIFIER: Error fetching allocations: $e\n$s");
+    } catch (e) {
       state = state.copyWith(error: e.toString(), isLoading: false);
     }
   }
 
   Future<void> addManualSaving({required double amount, required DateTime date}) async {
-    // For more immediate UI feedback, you could set loading state here
-    // state = state.copyWith(isLoading: true);
     try {
       await _service.addManualSaving(amount: amount, date: date);
-      await fetchAllocations(); // Refresh the list of allocations
-      // ignore: unused_result
-      _ref.refresh(savingsBalanceProvider); // Refresh the total balance
-      // ignore: unused_result
-      _ref.refresh(accountsProvider); 
+      await fetchAllocations(); 
+      final _ = _ref.refresh(savingsBalanceProvider);
+      final __ = _ref.refresh(accountsProvider); 
     } catch (e) {
-      print("SAVINGS_ALLOC_NOTIFIER: Error adding manual saving: $e");
-      // state = state.copyWith(error: e.toString(), isLoading: false); // Set error if not rethrowing
       rethrow; 
     }
-    // finally {
-    //   if (mounted) state = state.copyWith(isLoading: false); // Ensure loading is off
-    // }
   }
   
   void setDateRange(DateTime newStart, DateTime newEnd) {
@@ -120,4 +107,54 @@ class SavingsAllocationsNotifier extends StateNotifier<SavingsAllocationsState> 
 
 final savingsAllocationsProvider = StateNotifierProvider<SavingsAllocationsNotifier, SavingsAllocationsState>((ref) {
   return SavingsAllocationsNotifier(ref.watch(savingsFlutterServiceProvider), ref);
+});
+
+// === TASARRUF HEDEFLERİ İÇİN PROVIDER'LAR ===
+
+final savingsGoalsProvider = FutureProvider.autoDispose<List<SavingsGoalModel>>((ref) async {
+  final service = ref.watch(savingsFlutterServiceProvider);
+  return service.listGoals();
+});
+
+class SavingsGoalNotifier extends StateNotifier<AsyncValue<void>> {
+  final SavingsFlutterService _service;
+  final Ref _ref;
+
+  SavingsGoalNotifier(this._service, this._ref) : super(const AsyncData(null));
+
+  Future<void> createGoal({required String title, required double targetAmount, required DateTime targetDate}) async {
+    try {
+      await _service.createGoal(title: title, targetAmount: targetAmount, targetDate: targetDate);
+      // DÜZELTME: Uyarıyı gidermek için sonucu değişkene atıyoruz.
+      final _ = _ref.refresh(savingsGoalsProvider);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> deleteGoal(String goalId) async {
+    try {
+      await _service.deleteGoal(goalId);
+      // DÜZELTME: Uyarıları gidermek için sonuçları değişkenlere atıyoruz.
+      final _ = _ref.refresh(savingsGoalsProvider);
+      final __ = _ref.refresh(savingsBalanceProvider);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> allocateToGoal({required String goalId, required double amount}) async {
+    try {
+      await _service.allocateToGoal(goalId: goalId, amount: amount);
+      // DÜZELTME: Uyarıları gidermek için sonuçları değişkenlere atıyoruz.
+      final _ = _ref.refresh(savingsGoalsProvider);
+      final __ = _ref.refresh(savingsBalanceProvider);
+    } catch (e) {
+      rethrow;
+    }
+  }
+}
+
+final savingsGoalNotifierProvider = StateNotifierProvider.autoDispose<SavingsGoalNotifier, AsyncValue<void>>((ref) {
+  return SavingsGoalNotifier(ref.watch(savingsFlutterServiceProvider), ref);
 });

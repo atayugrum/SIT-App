@@ -1,184 +1,137 @@
-// File: flutter_app/lib/src/data/services/transaction_flutter_service.dart
+// File: lib/src/data/services/transaction_flutter_service.dart
 import 'dart:convert';
-import 'dart:async'; // For TimeoutException
+import 'dart:async';
 import 'package:http/http.dart' as http;
-// import 'package:intl/intl.dart'; // Not directly used here, but TransactionModel might use it
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+// import 'package:intl/intl.dart'; // KULLANILMIYOR, KALDIRILDI
+
 import '../models/transaction_model.dart';
 import '../../presentation/providers/auth_providers.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+const String _flaskApiBaseUrl = 'http://10.0.2.2:5000'; 
+
+final transactionServiceProvider = Provider<TransactionFlutterService>((ref) {
+  final userId = ref.watch(currentUserProvider.select((user) => user?.uid));
+  return TransactionFlutterService(userId);
+});
 
 class TransactionFlutterService {
-  static const String _flaskApiBaseUrl = 'http://10.0.2.2:5000'; // Android Emulator default
-  // For iOS Simulator: static const String _flaskApiBaseUrl = 'http://localhost:5000';
-  // For Web or physical device on same network: static const String _flaskApiBaseUrl = 'http://YOUR_COMPUTER_IP:5000';
-  final Ref _ref;
-
-  TransactionFlutterService(this._ref);
-
-  Future<TransactionModel> createTransaction(TransactionModel transaction) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
-      throw Exception("User not logged in. Cannot create transaction.");
-    }
-    final Map<String, dynamic> transactionData = transaction.toMap()..['userId'] = currentUser.uid;
-    
-    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions');
-    print("TRANSACTION_FLUTTER_SERVICE: Creating transaction at $url with data: ${jsonEncode(transactionData)}");
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(transactionData),
-      ).timeout(const Duration(seconds: 10));
-
-      print("TRANSACTION_FLUTTER_SERVICE: Create response status: ${response.statusCode}");
-
-      if (response.statusCode == 201) {
-        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
-        if (responseData['success'] == true && responseData.containsKey('transaction')) {
-          print("TRANSACTION_FLUTTER_SERVICE: Transaction created: ${responseData['transaction']}");
-          return TransactionModel.fromMap(responseData['transaction'] as Map<String, dynamic>);
-        } else {
-          throw Exception(responseData['error'] ?? 'Failed to create transaction: Unexpected API response format.');
-        }
-      } else {
-         final errorData = jsonDecode(response.body);
-        print("TRANSACTION_FLUTTER_SERVICE: Error creating - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to create transaction: ${errorData['error'] ?? response.reasonPhrase}');
-      }
-    } catch (e, s) {
-      print("TRANSACTION_FLUTTER_SERVICE: Exception during createTransaction: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is your Flask API server running and accessible?');
-      }
-      rethrow; 
-    }
-  }
+  final String? _userId;
+  TransactionFlutterService(this._userId);
 
   Future<List<TransactionModel>> listTransactions({
-    String? startDate, 
-    String? endDate,   
+    required String startDate,
+    required String endDate,
     String? type,
-    String? accountName, // <-- accountName parametresi burada
+    String? account,
   }) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
-      print("TRANSACTION_FLUTTER_SERVICE: User not logged in for listTransactions.");
+    if (_userId == null) {
+      print("TransactionFlutterService: User not logged in. Cannot list transactions.");
       return [];
     }
 
-    final Map<String, String> queryParams = {'userId': currentUser.uid};
-    if (startDate != null) queryParams['startDate'] = startDate;
-    if (endDate != null) queryParams['endDate'] = endDate;
+    final Map<String, String> queryParams = {
+      'userId': _userId, // DÜZELTME: '!' kaldırıldı
+      'startDate': startDate,
+      'endDate': endDate,
+    };
     if (type != null) queryParams['type'] = type;
-    if (accountName != null) queryParams['account'] = accountName; // <-- query'ye ekle
+    if (account != null) queryParams['account'] = account;
 
     final url = Uri.parse('$_flaskApiBaseUrl/api/transactions').replace(queryParameters: queryParams);
     print("TRANSACTION_FLUTTER_SERVICE: Listing transactions from $url");
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
-      print("TRANSACTION_FLUTTER_SERVICE: List response status: ${response.statusCode}");
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      final responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
-        if (responseData['success'] == true && responseData.containsKey('transactions')) {
-          final List<dynamic> transactionsData = responseData['transactions'];
-          final transactions = transactionsData
-              .map((data) => TransactionModel.fromMap(data as Map<String, dynamic>))
+        if (responseData['success'] == true && responseData['transactions'] != null) {
+          final List<dynamic> transactionsJson = responseData['transactions'];
+          final transactions = transactionsJson
+              .map((json) => TransactionModel.fromMap(json as Map<String, dynamic>))
               .toList();
           print("TRANSACTION_FLUTTER_SERVICE: Fetched ${transactions.length} transactions.");
           return transactions;
         } else {
-           throw Exception(responseData['error'] ?? 'Failed to list transactions: Unexpected API response format.');
+          print("TRANSACTION_FLUTTER_SERVICE: Failed to list transactions - API success false: ${responseData['error']}");
+          throw Exception('Failed to list transactions: ${responseData['error'] ?? 'Unknown API error'}');
         }
       } else {
-        final errorData = jsonDecode(response.body);
-        print("TRANSACTION_FLUTTER_SERVICE: Error listing - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to list transactions: ${errorData['error'] ?? response.reasonPhrase}');
+        print("TRANSACTION_FLUTTER_SERVICE: Error listing transactions - Status: ${response.statusCode}, Body: ${response.body}");
+        throw Exception('Failed to list transactions: ${responseData['error'] ?? response.reasonPhrase}');
       }
-    } catch (e, s) {
-      print("TRANSACTION_FLUTTER_SERVICE: Exception during listTransactions: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is your Flask API server running and accessible?');
+    } catch (e) {
+      print("TRANSACTION_FLUTTER_SERVICE: Exception during listTransactions: $e");
+      throw Exception('Network error or server issue while listing transactions.');
+    }
+  }
+
+  Future<TransactionModel> createTransaction(TransactionModel transaction) async {
+    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(transaction.toMap()),
+      );
+      final responseData = json.decode(response.body);
+      if (response.statusCode == 201) {
+        if (responseData['success'] == true && responseData['transaction'] != null) {
+          return TransactionModel.fromMap(responseData['transaction'] as Map<String, dynamic>);
+        } else {
+          throw Exception(responseData['error'] ?? 'Failed to create transaction: Unexpected API response format.');
+        }
+      } else {
+        throw Exception('Failed to create transaction: ${responseData['error'] ?? response.reasonPhrase}');
       }
+    } catch (e) {
+      print("TRANSACTION_FLUTTER_SERVICE: Exception during createTransaction: $e");
       rethrow;
     }
   }
 
-  Future<TransactionModel> updateTransaction(String transactionId, TransactionModel transaction) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
-      throw Exception("User not logged in. Cannot update transaction.");
-    }
-    final Map<String, dynamic> transactionData = transaction.toMap()..['userId'] = currentUser.uid;
-    
-    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions/$transactionId');
-    print("TRANSACTION_FLUTTER_SERVICE: Updating transaction $transactionId at $url with data: ${jsonEncode(transactionData)}");
-
+  Future<TransactionModel> updateTransaction(String id, TransactionModel transaction) async {
+    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions/$id');
     try {
       final response = await http.put(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(transactionData),
-      ).timeout(const Duration(seconds: 10));
-
-      print("TRANSACTION_FLUTTER_SERVICE: Update response status: ${response.statusCode}");
-
+        body: json.encode(transaction.toMapForUpdate()), // Artık bu metot var
+      );
+       final responseData = json.decode(response.body);
       if (response.statusCode == 200) {
-          final responseData = jsonDecode(response.body) as Map<String, dynamic>;
-        if (responseData['success'] == true && responseData.containsKey('transaction')) {
-          print("TRANSACTION_FLUTTER_SERVICE: Transaction updated: ${responseData['transaction']}");
+        if (responseData['success'] == true && responseData['transaction'] != null) {
           return TransactionModel.fromMap(responseData['transaction'] as Map<String, dynamic>);
         } else {
-          throw Exception(responseData['error'] ?? 'Failed to update transaction: Unexpected API response.');
+          throw Exception(responseData['error'] ?? 'Failed to update transaction: Unexpected API response format.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
-        print("TRANSACTION_FLUTTER_SERVICE: Error updating - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to update transaction: ${errorData['error'] ?? response.reasonPhrase}');
+        throw Exception('Failed to update transaction: ${responseData['error'] ?? response.reasonPhrase}');
       }
-    } catch (e, s) {
-      print("TRANSACTION_FLUTTER_SERVICE: Exception during updateTransaction: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is API server running?');
-      }
+    } catch (e) {
+      print("TRANSACTION_FLUTTER_SERVICE: Exception during updateTransaction: $e");
       rethrow;
     }
   }
 
-  Future<void> deleteTransaction(String transactionId) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
-      throw Exception("User not logged in. Cannot delete transaction.");
-    }
-    
-    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions/$transactionId').replace(queryParameters: {'userId': currentUser.uid});
-    print("TRANSACTION_FLUTTER_SERVICE: Deleting transaction $transactionId at $url");
-
+  Future<void> deleteTransaction(String id) async {
+    if (_userId == null) throw Exception("User not logged in.");
+    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions/$id?userId=$_userId'); // userId burada da düzeltildi
     try {
-      final response = await http.delete(url).timeout(const Duration(seconds: 10));
-      print("TRANSACTION_FLUTTER_SERVICE: Delete response status: ${response.statusCode}");
-
+      final response = await http.delete(url);
+      final responseData = json.decode(response.body);
       if (response.statusCode == 200) {
-          final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true) {
-          print("TRANSACTION_FLUTTER_SERVICE: Transaction $transactionId deleted successfully.");
-          return; 
+          return;
         } else {
-          throw Exception(responseData['error'] ?? 'Failed to delete transaction: Unexpected API response.');
+          throw Exception(responseData['error'] ?? 'Failed to delete transaction.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
-        print("TRANSACTION_FLUTTER_SERVICE: Error deleting - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to delete transaction: ${errorData['error'] ?? response.reasonPhrase}');
+        throw Exception('Failed to delete transaction: ${responseData['error'] ?? response.reasonPhrase}');
       }
-    } catch (e, s) {
-      print("TRANSACTION_FLUTTER_SERVICE: Exception during deleteTransaction: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is API server running?');
-      }
+    } catch (e) {
+      print("TRANSACTION_FLUTTER_SERVICE: Exception during deleteTransaction: $e");
       rethrow;
     }
   }

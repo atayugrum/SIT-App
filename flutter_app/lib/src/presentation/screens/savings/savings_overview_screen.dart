@@ -1,10 +1,12 @@
-// File: flutter_app/lib/src/presentation/screens/savings/savings_overview_screen.dart
+// File: lib/src/presentation/screens/savings/savings_overview_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../screens/savings/savings_goals_screen.dart';
 import '../../providers/savings_providers.dart';
-import '../../../data/models/savings_allocation_model.dart'; // Explicitly used for typing
-import 'manual_save_form_screen.dart'; // Assumes it's in the same directory
+import '../../../data/models/savings_allocation_model.dart';
+import 'manual_save_form_screen.dart';
 
 class SavingsOverviewScreen extends ConsumerWidget {
   const SavingsOverviewScreen({super.key});
@@ -24,8 +26,8 @@ class SavingsOverviewScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              // ignore: unused_result
-              ref.refresh(savingsBalanceProvider);
+              // DÜZELTME 1: Uyarıyı gidermek için sonucu bir değişkene atıyoruz.
+              final _ = ref.refresh(savingsBalanceProvider);
               allocationsNotifier.fetchAllocations();
             },
           )
@@ -33,8 +35,9 @@ class SavingsOverviewScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          // ignore: unused_result
-          ref.refresh(savingsBalanceProvider);
+          // DÜZELTME 2: async bir fonksiyonda await ile beklemek daha doğrudur.
+          final refreshedBalance = await ref.refresh(savingsBalanceProvider);
+          debugPrint('Refreshed balance: $refreshedBalance');
           await allocationsNotifier.fetchAllocations();
         },
         child: ListView(
@@ -76,16 +79,29 @@ class SavingsOverviewScreen extends ConsumerWidget {
               )),
               error: (err, stack) => Card(child: ListTile(title: Text('Error loading balance: $err', style: TextStyle(color: theme.colorScheme.error)))),
             ),
+            const SizedBox(height: 16),
+            Card(
+              elevation: 2,
+              child: ListTile(
+                leading: const Icon(Icons.track_changes_rounded, color: Colors.purple),
+                title: const Text('Tasarruf Hedeflerim'),
+                subtitle: const Text('Hedeflerinizi görüntüleyin ve yönetin'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const SavingsGoalsScreen()),
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Savings Allocations', style: theme.textTheme.headlineSmall),
-                // TODO: Add date range and source filter buttons here later
+                Text('Recent Allocations', style: theme.textTheme.headlineSmall),
               ],
             ),
             const Divider(height: 20),
-
             if (allocationsState.isLoading && allocationsState.allocations.isEmpty)
               const Center(child: CircularProgressIndicator())
             else if (allocationsState.error != null)
@@ -116,16 +132,12 @@ class SavingsOverviewScreen extends ConsumerWidget {
                           color: isAuto ? Colors.green.shade700 : Colors.orange.shade700,
                         ),
                       ),
-                      title: Text('${isAuto ? "Automatic from Income" : "Manual Deposit"}'),
-                      subtitle: Text(
-                        'Date: ${DateFormat.yMMMd().format(allocation.date.toLocal())}'
-                        '${allocation.transactionId != null ? "\nRef Tx: ...${allocation.transactionId!.substring(allocation.transactionId!.length - 6)}" : ""}'
-                      ),
+                      title: Text(isAuto ? "Automatic from Income" : "Manual Deposit"),
+                      subtitle: Text('Date: ${DateFormat.yMMMd().format(allocation.date.toLocal())}'),
                       trailing: Text(
                         '+ ${numberFormat.format(allocation.amount)}',
                         style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold),
                       ),
-                       isThreeLine: allocation.transactionId != null,
                     ),
                   );
                 },
@@ -139,8 +151,8 @@ class SavingsOverviewScreen extends ConsumerWidget {
             MaterialPageRoute(builder: (context) => const ManualSaveFormScreen()), 
           );
           if (saved == true && context.mounted) {
-            // ignore: unused_result
-            ref.refresh(savingsBalanceProvider);
+            // Bu uyarıyı da düzeltiyoruz.
+            final _ = ref.refresh(savingsBalanceProvider);
             allocationsNotifier.fetchAllocations();
           }
         },

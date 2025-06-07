@@ -1,10 +1,11 @@
-// File: flutter_app/lib/src/presentation/screens/balance/balance_overview_screen.dart
+// File: lib/src/presentation/screens/balance/balance_overview_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart'; 
-import '../../../data/models/account_model.dart'; // Import is now actively used by explicit types
+import 'package:intl/intl.dart';
+
 import '../../providers/account_providers.dart';
-import '../accounts/account_detail_screen.dart'; 
+import '../accounts/account_detail_screen.dart';
+import '../accounts/account_form_screen.dart';
 
 class BalanceOverviewScreen extends ConsumerWidget {
   const BalanceOverviewScreen({super.key});
@@ -13,169 +14,99 @@ class BalanceOverviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final accountsAsyncValue = ref.watch(accountsProvider);
     final theme = Theme.of(context);
-    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺', decimalDigits: 2);
+    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Balance Overview'),
+        title: const Text('My Accounts & Balances'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh Balances',
-            onPressed: () {
-              // ignore: unused_result
-              ref.refresh(accountsProvider);
-            },
+            onPressed: () => ref.invalidate(accountsProvider),
           ),
         ],
       ),
       body: accountsAsyncValue.when(
-        data: (List<AccountModel> accountsList) { // <-- EXPLICITLY TYPED accountsList
-          double totalNetBalance = 0;
-          Map<String, double> balancesByCurrency = {};
-
-          for (AccountModel account in accountsList) { // <-- EXPLICITLY TYPED account (or inferred)
-            totalNetBalance += account.currentBalance; 
-            balancesByCurrency.update(
-              account.currency.toUpperCase(),
-              (value) => value + account.currentBalance,
-              ifAbsent: () => account.currentBalance,
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              // ignore: unused_result
-              ref.refresh(accountsProvider);
-            },
-            child: ListView(
-              padding: const EdgeInsets.all(16.0),
-              children: [
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        data: (accounts) {
+          double totalBalance = accounts.fold(0.0, (sum, acc) => sum + acc.currentBalance);
+          return Column(
+            children: [
+              // Toplam Bakiye Kartı
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Card(
+                  elevation: 4.0,
+                  color: theme.colorScheme.secondaryContainer,
                   child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Total Net Balance (Aggregated)', 
-                          style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          numberFormat.format(totalNetBalance),
-                          style: theme.textTheme.displayMedium?.copyWith(
-                            color: totalNetBalance >= 0 ? Colors.green.shade700 : theme.colorScheme.error,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (balancesByCurrency.keys.length > 1) ...[
-                           const SizedBox(height: 10),
-                           Text("Breakdown by Currency:", style: theme.textTheme.labelSmall),
-                           ...balancesByCurrency.entries.map((entry) => Text(
-                             "${entry.key}: ${NumberFormat.currency(symbol: '', decimalDigits: 2).format(entry.value)}", 
-                             style: theme.textTheme.bodySmall,
-                           )),
-                        ]
+                        Text('Total Net Balance', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSecondaryContainer)),
+                        Text(numberFormat.format(totalBalance), style: theme.textTheme.headlineSmall?.copyWith(color: theme.colorScheme.onSecondaryContainer, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'Accounts',
-                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const Divider(height: 20, thickness: 1),
-                if (accountsList.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32.0),
-                    child: Center(child: Text('No accounts found. Add one from the Accounts screen!')),
-                  )
-                else
-                  ListView.builder(
-                    shrinkWrap: true, 
-                    physics: const NeverScrollableScrollPhysics(), 
-                    itemCount: accountsList.length,
-                    itemBuilder: (context, index) {
-                      final AccountModel account = accountsList[index]; // <-- EXPLICITLY TYPED account
-                      IconData accountIconData = Icons.wallet_outlined; 
-                      if (account.accountType.toLowerCase().contains("bank")) {
-                        accountIconData = Icons.account_balance_outlined;
-                      } else if (account.accountType.toLowerCase().contains("cash")) {
-                        accountIconData = Icons.money_outlined;
-                      } else if (account.accountType.toLowerCase().contains("card")) {
-                        accountIconData = Icons.credit_card_outlined;
-                      } else if (account.accountType.toLowerCase().contains("saving")) {
-                        accountIconData = Icons.savings_outlined;
-                      } else if (account.accountType.toLowerCase().contains("investment")) {
-                        accountIconData = Icons.trending_up_outlined;
-                      }
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 6.0),
-                        elevation: 1.5,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: theme.colorScheme.secondaryContainer,
-                            child: Icon(accountIconData, color: theme.colorScheme.onSecondaryContainer),
-                          ),
-                          title: Text(account.accountName, style: const TextStyle(fontWeight: FontWeight.w500)),
-                          subtitle: Text("${account.accountType} - ${account.currency.toUpperCase()}"),
-                          trailing: Text(
-                            // Using currency from account model for individual balance display
-                            NumberFormat.currency(symbol: account.currency.toUpperCase() == "TRY" ? "₺" : account.currency.toUpperCase() + " ", decimalDigits: 2)
-                                .format(account.currentBalance),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: account.currentBalance >= 0 ? Colors.green.shade700 : theme.colorScheme.error,
-                            ),
-                          ),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => AccountDetailScreen(account: account),
-                              ),
-                            );
-                          },
+              ),
+              
+              // Hesap Listesi
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 80), // FAB için boşluk
+                  itemCount: accounts.length,
+                  itemBuilder: (context, index) {
+                    final account = accounts[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          child: Icon(account.accountType == 'Nakit' ? Icons.money : Icons.account_balance),
                         ),
-                      );
-                    },
-                  ),
-              ],
-            ),
+                        title: Text(account.accountName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(account.accountType),
+                        trailing: Text(
+                          numberFormat.format(account.currentBalance),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: account.currentBalance >= 0 ? Colors.green.shade800 : theme.colorScheme.error,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => AccountDetailScreen(account: account),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) {
-          print("BALANCE_OVERVIEW_SCREEN: Error: $err\n$stack");
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                   Icon(Icons.error_outline, color: theme.colorScheme.error, size: 50),
-                   const SizedBox(height: 10),
-                   Text('Error loading balance overview: ${err.toString().replaceFirst("Exception: ", "")}', textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error)),
-                   const SizedBox(height:20),
-                   ElevatedButton.icon(
-                       icon: const Icon(Icons.refresh),
-                       label: const Text("Retry"),
-                       onPressed: () {
-                         // ignore: unused_result
-                         ref.refresh(accountsProvider);
-                       }
-                   )
-                ],
-              ),
-            )
+        error: (err, stack) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text('Error loading accounts: $err', style: TextStyle(color: theme.colorScheme.error)),
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final bool? result = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (context) => const AccountFormScreen()),
           );
-        }
+          if (result == true && context.mounted) {
+            ref.invalidate(accountsProvider); 
+          }
+        },
+        label: const Text('Add Account'),
+        icon: const Icon(Icons.add),
       ),
     );
   }

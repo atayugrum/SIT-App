@@ -1,45 +1,17 @@
-// File: flutter_app/lib/src/presentation/screens/transactions/transactions_screen.dart
+// File: lib/src/presentation/screens/transactions/transactions_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../../providers/transaction_providers.dart';
+import '../../providers/account_providers.dart';
+import '../../providers/analytics_providers.dart'; 
 import '../../../data/models/transaction_model.dart';
-import 'transaction_flow_screen.dart'; 
-import '../../providers/transaction_form_provider.dart'; 
-import '../../../core/categories.dart'; // <-- ADD THIS IMPORT
+import 'transaction_card.dart';
+import 'transaction_flow_screen.dart';
 
-class TransactionsScreen extends ConsumerStatefulWidget {
+class TransactionsScreen extends ConsumerWidget {
   const TransactionsScreen({super.key});
-
-  @override
-  ConsumerState<TransactionsScreen> createState() => _TransactionsScreenState();
-}
-
-class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(transactionsProvider.notifier).fetchTransactions();
-      }
-    });
-  }
-
-  Future<void> _selectDateRange(BuildContext context) async {
-    final notifier = ref.read(transactionsProvider.notifier);
-    final currentRange = ref.read(transactionsProvider);
-
-    final DateTimeRange? picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
-      initialDateRange: DateTimeRange(start: currentRange.startDate, end: currentRange.endDate),
-    );
-    if (picked != null && mounted) { // Added mounted check
-      notifier.setDateRange(picked.start, picked.end);
-    }
-  }
 
   void _confirmAndDeleteTransaction(BuildContext context, WidgetRef ref, TransactionModel transaction) {
     showDialog(
@@ -51,30 +23,24 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           actions: <Widget>[
             TextButton(
               child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(ctx).pop();
-              },
+              onPressed: () => Navigator.of(ctx).pop(),
             ),
             TextButton(
               style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
               child: const Text('Delete'),
               onPressed: () async {
-                Navigator.of(ctx).pop(); // Close dialog
+                Navigator.of(ctx).pop();
                 try {
-                  if (transaction.id == null) {
-                    throw Exception("Transaction ID is null, cannot delete.");
-                  }
+                  if (transaction.id == null) throw Exception("Transaction ID is null, cannot delete.");
                   await ref.read(transactionsProvider.notifier).deleteTransactionFromList(transaction.id!);
-                  if (mounted) { // Check mounted again before showing SnackBar
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Transaction deleted successfully!'), backgroundColor: Colors.green),
-                    );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction deleted successfully!'), backgroundColor: Colors.green));
+                    ref.invalidate(accountsProvider);
+                    ref.invalidate(dashboardInsightsProvider);
                   }
                 } catch (e) {
-                  if (mounted) { // Check mounted
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error deleting transaction: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.redAccent),
-                    );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting transaction: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.redAccent));
                   }
                 }
               },
@@ -86,183 +52,197 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   }
 
   void _navigateToEditTransaction(BuildContext context, WidgetRef ref, TransactionModel transaction) {
-    // Load the transaction data into the form provider for editing
-    ref.read(transactionFormNotifierProvider.notifier).loadTransactionForEdit(transaction);
-
     Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => TransactionFlowScreen(
-          transactionToEdit: transaction, // Pass the transaction to edit
-        ),
-      ),
-    ).then((result) {
-      if (result == true && mounted) { // If edit screen popped with success indication
-        ref.read(transactionsProvider.notifier).fetchTransactions();
+      MaterialPageRoute(builder: (context) => TransactionFlowScreen(transactionToEdit: transaction)),
+    ).then((updated) {
+      if (updated == true && context.mounted) {
+        ref.invalidate(transactionsProvider);
+        ref.invalidate(accountsProvider);
+        ref.invalidate(dashboardInsightsProvider);
       }
     });
   }
 
-
   @override
-  Widget build(BuildContext context) {
-    // 'ref' is directly available in ConsumerState's build method
-    final state = ref.watch(transactionsProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final transactionsState = ref.watch(transactionsProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Transactions'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh), // Added refresh button
-            tooltip: 'Refresh Transactions',
-            onPressed: () => ref.read(transactionsProvider.notifier).fetchTransactions(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            tooltip: 'Select Date Range',
-            onPressed: () => _selectDateRange(context),
-          ),
-        ],
+        automaticallyImplyLeading: false, // MainScreen'in bir parçası olduğu için geri tuşu yok
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                    'Period: ${DateFormat.yMd().format(state.startDate)} - ${DateFormat.yMd().format(state.endDate)}',
-                    style: theme.textTheme.labelMedium,
-                ),
-                // You can add a Text widget here to show state.filterType if it's active
-              ],
-            ),
+          // YENİ: Özet Kartı
+          _SummaryCard(
+            totalIncome: transactionsState.totalIncome,
+            totalExpense: transactionsState.totalExpense,
+            isLoading: transactionsState.isLoading,
           ),
-          if (state.isLoading && state.transactions.isEmpty)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
-          else if (state.error != null)
-            Expanded(child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text('Error loading transactions:\n${state.error.toString().replaceFirst("Exception: ", "")}', textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error)),
-                )
-            ))
-          else if (state.transactions.isEmpty)
-            const Expanded(child: Center(child: Text('No transactions found for this period.')))
-          else
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                itemCount: state.transactions.length,
-                itemBuilder: (context, index) {
-                  final TransactionModel transaction = state.transactions[index];
-                  final bool isIncome = transaction.type == 'income';
-                  final Color amountColor = isIncome ? Colors.green.shade700 : theme.colorScheme.error;
+          // YENİ: Filtreleme Çubuğu
+          _FilterBar(),
+          const Divider(height: 1, thickness: 1),
 
-                  IconData categoryIconData = Icons.category_outlined; // Default
-                  final Map<String, IconData> icons = isIncome ? incomeCategories : expenseCategories;
-                  if (icons.containsKey(transaction.category)) {
-                    categoryIconData = icons[transaction.category]!;
-                  }
-
-                  return Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    elevation: 1.5,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    child: ListTile( 
-                      leading: CircleAvatar(
-                        backgroundColor: theme.colorScheme.primaryContainer.withAlpha((255 * 0.5).round()),
-                        child: Icon(categoryIconData, size: 22, color: theme.colorScheme.onPrimaryContainer),
-                      ),
-                      title: Text(
-                        transaction.category + (transaction.subCategory != null && transaction.subCategory!.isNotEmpty ? ' > ${transaction.subCategory}' : ''),
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (transaction.description != null && transaction.description!.isNotEmpty)
-                            Text(
-                              transaction.description!,
-                              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade700),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
+          // İşlem Listesi
+          Expanded(
+            child: transactionsState.isLoading && transactionsState.transactions.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : transactionsState.error != null
+                    ? Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Error: ${transactionsState.error}', textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error))))
+                    : transactionsState.transactions.isEmpty
+                        ? const Center(child: Text('No transactions found for the selected period.'))
+                        : RefreshIndicator(
+                            onRefresh: () async => ref.read(transactionsProvider.notifier).fetchTransactions(),
+                            child: ListView.builder(
+                              itemCount: transactionsState.transactions.length,
+                              itemBuilder: (context, index) {
+                                final tx = transactionsState.transactions[index];
+                                return TransactionCard(
+                                  transaction: tx,
+                                  onTap: () => _navigateToEditTransaction(context, ref, tx),
+                                  menuItems: [
+                                     PopupMenuItem<String>(
+                                      value: 'edit',
+                                      child: const ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit')),
+                                      onTap: () => _navigateToEditTransaction(context, ref, tx),
+                                    ),
+                                    PopupMenuItem<String>(
+                                      value: 'delete',
+                                      child: const ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete', style: TextStyle(color: Colors.red))),
+                                      onTap: () => _confirmAndDeleteTransaction(context, ref, tx),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
-                          Text(
-                            transaction.account,
-                            style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ),
-                      trailing: Row( 
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                '${isIncome ? "" : "-"}₺${transaction.amount.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  color: amountColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                DateFormat.yMMMd().format(transaction.date),
-                                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
-                              ),
-                            ],
-                          ),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert),
-                            onSelected: (String value) {
-                              if (value == 'edit') {
-                                _navigateToEditTransaction(context, ref, transaction);
-                              } else if (value == 'delete') {
-                                _confirmAndDeleteTransaction(context, ref, transaction);
-                              }
-                            },
-                            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                              const PopupMenuItem<String>(
-                                value: 'edit',
-                                child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit')),
-                              ),
-                              const PopupMenuItem<String>(
-                                value: 'delete',
-                                child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete', style: TextStyle(color: Colors.red))),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+          ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          ref.read(transactionFormNotifierProvider.notifier).reset(); 
-          final result = await Navigator.of(context).push<bool>(
-            MaterialPageRoute(builder: (context) => const TransactionFlowScreen()), // For creating new
-          );
-          if (result == true && mounted) { 
-            ref.read(transactionsProvider.notifier).fetchTransactions();
+    );
+  }
+}
+
+// Ayrı bir widget olarak özet kartı
+class _SummaryCard extends StatelessWidget {
+  final double totalIncome;
+  final double totalExpense;
+  final bool isLoading;
+
+  const _SummaryCard({required this.totalIncome, required this.totalExpense, required this.isLoading});
+  
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺', decimalDigits: 2);
+    final net = totalIncome - totalExpense;
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      color: theme.cardColor,
+      child: isLoading
+        ? const Center(child: SizedBox(height: 48, child: LinearProgressIndicator()))
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildSummaryItem('Total Income', numberFormat.format(totalIncome), Colors.green.shade700, theme),
+              _buildSummaryItem('Total Expense', numberFormat.format(totalExpense), theme.colorScheme.error, theme),
+              _buildSummaryItem('Net', numberFormat.format(net), net >= 0 ? Colors.blue.shade800 : theme.colorScheme.error, theme),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildSummaryItem(String label, String value, Color color, ThemeData theme) {
+    return Column(
+      children: [
+        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade700)),
+        const SizedBox(height: 4),
+        Text(value, style: theme.textTheme.titleMedium?.copyWith(color: color, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}
+
+
+// Ayrı bir widget olarak filtre çubuğu
+class _FilterBar extends ConsumerWidget {
+  const _FilterBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Seçili filtreye göre chip'i renklendirmek için mevcut aralığı alalım
+    final currentStartDate = ref.watch(transactionsProvider.select((s) => s.startDate));
+    final currentEndDate = ref.watch(transactionsProvider.select((s) => s.endDate));
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      child: Row(
+        children: [
+          _buildQuickFilterChip(context, ref, 'This Month', QuickDateRange.thisMonth, currentStartDate, currentEndDate),
+          _buildQuickFilterChip(context, ref, 'Last 3 Months', QuickDateRange.last3Months, currentStartDate, currentEndDate),
+          _buildQuickFilterChip(context, ref, 'Last 6 Months', QuickDateRange.last6Months, currentStartDate, currentEndDate),
+          _buildQuickFilterChip(context, ref, 'All Time', QuickDateRange.allTime, currentStartDate, currentEndDate),
+          const SizedBox(width: 8),
+          ActionChip(
+            avatar: const Icon(Icons.calendar_today, size: 16),
+            label: const Text('Custom...'),
+            onPressed: () async {
+              final picked = await showDateRangePicker(
+                context: context,
+                initialDateRange: DateTimeRange(start: currentStartDate, end: currentEndDate),
+                firstDate: DateTime(2000),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+              );
+              if (picked != null) {
+                ref.read(transactionsProvider.notifier).setDateRange(picked.start, picked.end);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildQuickFilterChip(BuildContext context, WidgetRef ref, String label, QuickDateRange range, DateTime currentStart, DateTime currentEnd) {
+    bool isSelected = false;
+    // Hangi chip'in seçili olduğunu anlamak için basit bir kontrol
+    final now = DateTime.now();
+    DateTime checkStart;
+    // Removed unused variable 'checkEnd'
+    switch(range) {
+        case QuickDateRange.thisMonth:
+            checkStart = DateTime(now.year, now.month, 1);
+            if(currentStart.year == checkStart.year && currentStart.month == checkStart.month && currentStart.day == checkStart.day) isSelected = true;
+            break;
+        case QuickDateRange.last3Months:
+            checkStart = DateTime(now.year, now.month - 2, 1);
+            if(currentStart.year == checkStart.year && currentStart.month == checkStart.month && currentStart.day == checkStart.day) isSelected = true;
+            break;
+        case QuickDateRange.last6Months:
+            checkStart = DateTime(now.year, now.month - 5, 1);
+            if(currentStart.year == checkStart.year && currentStart.month == checkStart.month && currentStart.day == checkStart.day) isSelected = true;
+            break;
+        case QuickDateRange.allTime:
+            checkStart = DateTime(2000);
+            if(currentStart.year == checkStart.year) isSelected = true;
+            break;
+        default: break;
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (bool selected) {
+          if (selected) { // Sadece seçildiğinde işlem yap
+            ref.read(transactionsProvider.notifier).setQuickDateRange(range);
           }
         },
-        label: const Text('Add'),
-        icon: const Icon(Icons.add),
-        tooltip: 'Add Transaction',
       ),
     );
   }
