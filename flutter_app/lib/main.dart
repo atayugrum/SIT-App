@@ -1,31 +1,34 @@
 // File: lib/main.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:intl/date_symbol_data_local.dart'; // YENİ: Tarih formatlama için gerekli import
 
-import 'app_widget.dart'; // Sizin App widget'ınızın import yolu
-import 'firebase_options.dart'; // Firebase konfigürasyonunuz
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
-// main fonksiyonunu async yapıyoruz
+import 'app_widget.dart'; // Projenizin ana widget'ını içeren dosya
+import 'firebase_options.dart'; // Firebase CLI tarafından oluşturulan konfigürasyon dosyası
+
+// main fonksiyonunu asenkron olarak tanımlıyoruz.
+// Bu, uygulama başlamadan önce bazı başlatma işlemlerinin tamamlanmasını beklememizi sağlar.
 Future<void> main() async {
-  // Flutter binding'lerinin başlatıldığından emin oluyoruz
+  // Flutter framework'ünün native kod ile haberleşmek için hazır olduğundan emin oluyoruz.
+  // Firebase gibi eklentileri başlatmadan önce bu satır zorunludur.
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase'i başlatıyoruz
+  // Firebase servislerini, platforma özel konfigürasyonlarla başlatıyoruz.
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // YENİ: Uygulama başlamadan önce tarih formatlama yerel ayarlarını başlatıyoruz
-  // Bu satır, LocaleDataException hatasını çözer.
+  // Türkçe tarih ve sayı formatlaması için 'intl' paketini başlatıyoruz.
+  // Bu satır, İşlem Geçmişi sayfasındaki DateFormat ve NumberFormat hatalarını çözer.
   await initializeDateFormatting('tr_TR', null);
-
-  // Uygulamayı çalıştırıyoruz
+  
+  // Riverpod state yönetimi için ProviderScope ile sarmalayarak uygulamayı çalıştırıyoruz.
   runApp(
     const ProviderScope(
-      child: AppWidget(), // Sizin ana widget'ınızın adı (örn: MyApp, SitApp)
+      child: AppWidget(),
     ),
   );
 }

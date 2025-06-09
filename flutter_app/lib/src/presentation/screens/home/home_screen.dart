@@ -6,16 +6,15 @@ import 'package:intl/intl.dart';
 // Gerekli tüm provider ve ekranlar için importlar
 import '../../providers/analytics_providers.dart';
 import '../../providers/transaction_providers.dart';
-import '../../providers/auth_providers.dart'; // authServiceProvider için
-import '../../providers/transaction_form_provider.dart';
+import '../../providers/auth_providers.dart';
 import '../transactions/transactions_screen.dart';
-import '../transactions/transaction_flow_screen.dart';
 import '../analytics/analytics_overview_screen.dart';
 import '../profile/profile_screen.dart';
 import '../budgets/budget_overview_screen.dart';
 import '../balance/balance_overview_screen.dart';
 import '../savings/savings_overview_screen.dart';
-// Yeni hesap ekleme formu için
+import '../investments/investment_overview_screen.dart';
+import '../transactions/batch_transaction_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -28,82 +27,83 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard'),
-        automaticallyImplyLeading: false, // Geri tuşunu engelle
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () async {
               await ref.read(authServiceProvider).signOut();
-              // AuthWrapper yönlendirmeyi halledecek
             },
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(dashboardInsightsProvider);
-          ref.invalidate(transactionsProvider);
-        },
+        onRefresh: () async => ref.invalidate(dashboardInsightsProvider),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. Toplam Bakiye ve Kumbara Kartları
               dashboardInsightsAsync.when(
                 data: (insights) {
-                  final netBalance = insights.currentMonthIncomeExpense != null
-                      ? insights.currentMonthIncomeExpense!.totalIncome - insights.currentMonthIncomeExpense!.totalExpense
-                      : 0.0;
-                  return _buildHeaderCards(context, theme, netBalance, insights.savingsBalance);
+                  // DÜZELTME: Veri modelindeki doğru alan adları kullanıldı.
+                  return _buildHeaderCards(
+                    context, 
+                    theme, 
+                    insights.incomeExpenseSummary.net, 
+                    insights.savingsBalance
+                  );
                 },
                 loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
-                error: (err, stack) => const SizedBox(height: 120, child: Center(child: Text("Balance could not be loaded."))),
+                error: (err, stack) => const SizedBox(height: 120, child: Center(child: Text("Bakiye yüklenemedi."))),
               ),
 
               const SizedBox(height: 24),
-              _buildSectionTitle(theme, 'Quick Actions'),
+              _buildSectionTitle(theme, 'Modüller'),
               const SizedBox(height: 12),
 
-              // 2. Modül Butonları Grid'i
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
-                childAspectRatio: 1.5, // Kartların en-boy oranı
+                childAspectRatio: 1.5,
                 children: [
-                  _buildModuleCard(context, theme, 'New Transaction', Icons.add_card_rounded, () {
-                    ref.read(transactionFormNotifierProvider.notifier).reset();
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TransactionFlowScreen()));
-                  }),
-                  _buildModuleCard(context, theme, 'My Transactions', Icons.swap_horiz_rounded, () {
+                  _buildModuleCard(context, theme, 'İşlemlerim', Icons.swap_horiz_rounded, Colors.blue, () {
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TransactionsScreen()));
                   }),
-                  _buildModuleCard(context, theme, 'My Budgets', Icons.assessment_outlined, () {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BudgetOverviewScreen()));
-                  }),
-                  _buildModuleCard(context, theme, 'Analytics', Icons.bar_chart_rounded, () {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsOverviewScreen()));
-                  }),
-                   _buildModuleCard(context, theme, 'My Accounts', Icons.account_balance_wallet_outlined, () {
+                  _buildModuleCard(context, theme, 'Hesaplarım', Icons.account_balance_wallet_outlined, Colors.green, () {
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BalanceOverviewScreen()));
                   }),
-                   _buildModuleCard(context, theme, 'My Profile', Icons.person_outline_rounded, () {
+                  _buildModuleCard(context, theme, 'Tasarruflar', Icons.savings_outlined, Colors.orange, () {
+                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SavingsOverviewScreen()));
+                  }),
+                  _buildModuleCard(context, theme, 'Bütçelerim', Icons.pie_chart_outline_rounded, Colors.red, () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BudgetOverviewScreen()));
+                  }),
+                  _buildModuleCard(context, theme, 'Yatırımlarım', Icons.show_chart_rounded, Colors.teal, () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InvestmentOverviewScreen()));
+                  }),
+                  // EKSİK OLDUĞUNU BELİRTTİĞİNİZ KART
+                  _buildModuleCard(context, theme, 'Analizler', Icons.bar_chart_rounded, Colors.purple, () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsOverviewScreen()));
+                  }),
+                   _buildModuleCard(context, theme, 'AI Hızlı Giriş', Icons.auto_awesome_rounded, Colors.indigo, () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BatchTransactionScreen()));
+                  }),
+                   _buildModuleCard(context, theme, 'Profilim', Icons.person_outline_rounded, Colors.grey.shade600, () {
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
                   }),
                 ],
               ),
               
               const SizedBox(height: 24),
-              _buildSectionTitle(theme, 'Recent Transactions'),
+              _buildSectionTitle(theme, 'Son İşlemler'),
               const SizedBox(height: 12),
 
-              // 3. Son Harcamalar Listesi
               _buildRecentTransactionsCard(context, theme),
-
             ],
           ),
         ),
@@ -125,7 +125,7 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Total Balance', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer)),
+                    Text('Net Bakiye', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer)),
                     const SizedBox(height: 8),
                     Text(numberFormat.format(netBalance), style: theme.textTheme.headlineMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold)),
                   ],
@@ -145,7 +145,7 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Savings', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSecondaryContainer)),
+                    Text('Kumbara', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSecondaryContainer)),
                     const SizedBox(height: 8),
                     Text(numberFormat.format(savingsBalance), style: theme.textTheme.headlineMedium?.copyWith(color: theme.colorScheme.onSecondaryContainer, fontWeight: FontWeight.bold)),
                   ],
@@ -158,7 +158,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildModuleCard(BuildContext context, ThemeData theme, String title, IconData icon, VoidCallback onTap) {
+  Widget _buildModuleCard(BuildContext context, ThemeData theme, String title, IconData icon, Color color, VoidCallback onTap) {
     return Card(
       elevation: 2.0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
@@ -168,7 +168,7 @@ class HomeScreen extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 36, color: theme.colorScheme.primary),
+            Icon(icon, size: 36, color: color),
             const SizedBox(height: 12),
             Text(title, textAlign: TextAlign.center, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
           ],

@@ -1,18 +1,24 @@
-// File: flutter_app/lib/src/presentation/screens/profile/profile_screen.dart
+// File: lib/src/presentation/screens/profile/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Direct import for User type
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_svg/flutter_svg.dart'; 
 import '../../providers/auth_providers.dart';
 import '../../providers/profile_providers.dart';
 import '../../../data/models/user_profile_model.dart'; 
 import 'edit_profile_screen.dart'; 
-import '../settings/manage_categories_screen.dart'; // For Manage Custom Categories
+import '../settings/manage_categories_screen.dart';
+import 'finance_test_intro_screen.dart';
+// YENİ EKLENEN EKRANLARIN IMPORTLARI
+import 'change_password_screen.dart';
+import 'change_email_screen.dart';
+import 'icon_selection_screen.dart';
+import '../settings/preferences_screen.dart';
+
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  // Helper method to build info rows, kept within the class for context access
   Widget _buildInfoRow(BuildContext context, IconData icon, String label, String? value) {
     final theme = Theme.of(context);
     return Padding(
@@ -28,7 +34,7 @@ class ProfileScreen extends ConsumerWidget {
               children: [
                 Text(label, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade700)),
                 const SizedBox(height: 3),
-                Text(value != null && value.isNotEmpty ? value : 'Not set', style: theme.textTheme.titleMedium),
+                Text(value != null && value.isNotEmpty ? value : 'Belirlenmedi', style: theme.textTheme.titleMedium),
               ],
             ),
           ),
@@ -65,7 +71,7 @@ class ProfileScreen extends ConsumerWidget {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 40.0), // Added bottom padding
+      padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 40.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
@@ -84,159 +90,161 @@ class ProfileScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 32),
           Card(
-            elevation: 3,
+            elevation: 2,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  _buildInfoRow(context, Icons.email_outlined, 'Email', firebaseUser.email),
+                  _buildInfoRow(context, Icons.email_outlined, 'E-posta Adresi', firebaseUser.email),
                   const Divider(height: 24, thickness: 0.5),
-                  _buildInfoRow(context, Icons.cake_outlined, 'Birth Date', userProfile.birthDate),
-                  const Divider(height: 24, thickness: 0.5),
-                  _buildInfoRow(context, Icons.shield_outlined, 'Risk Profile', userProfile.riskProfile),
-                  const Divider(height: 24, thickness: 0.5),
-                  _buildInfoRow(context, Icons.image_search_outlined, 'Profile Icon ID', userProfile.profileIconId),
+                  _buildInfoRow(context, Icons.cake_outlined, 'Doğum Tarihi', userProfile.birthDate),
+                   const Divider(height: 24, thickness: 0.5),
+                  _buildInfoRow(context, Icons.shield_outlined, 'Risk Profiliniz', userProfile.riskProfile),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.edit_note_outlined),
-            label: const Text('Edit Profile Details'),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50), 
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          
+          const SizedBox(height: 24),
+          Card(
+            elevation: 3,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+              leading: CircleAvatar(
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                child: Icon(Icons.psychology_outlined, color: theme.colorScheme.onSecondaryContainer),
+              ),
+              title: Text("Finansal Profil Testi", style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              subtitle: const Text("Risk toleransınızı ve finansal sağlığınızı ölçün."),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
+              onTap: () {
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FinanceTestIntroScreen()));
+              },
             ),
-            onPressed: () {
+          ),
+          
+          const SizedBox(height: 32),
+
+          // --- YENİ EKLENEN BUTONLAR ---
+          _buildActionButton(
+            context: context,
+            icon: Icons.edit_note_outlined,
+            label: 'Profil Detaylarını Düzenle',
+            onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => EditProfileScreen(initialProfile: userProfile),
-                ),
+                MaterialPageRoute(builder: (_) => EditProfileScreen(initialProfile: userProfile)),
               ).then((value) {
-                if (value == true || value == null) { 
-                    // ignore: unused_result
-                    ref.refresh(userProfileProvider);
-                }
+                if (value == true) ref.invalidate(userProfileProvider);
               });
             },
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.category_outlined),
-            label: const Text('Manage Custom Categories'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              side: BorderSide(color: theme.colorScheme.primary),
-            ),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ManageCategoriesScreen()),
-              );
+          _buildActionButton(
+            context: context,
+            icon: Icons.image_outlined,
+            label: 'Profil İkonu Değiştir',
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const IconSelectionScreen()));
             },
           ),
-          // TODO: Add buttons for other deferred features (Change Email, Password, Preferences, Icon Selection Screen)
-          // when those screens are ready.
-          // Example:
-          // const SizedBox(height: 12),
-          // OutlinedButton.icon(
-          //   icon: const Icon(Icons.palette_outlined),
-          //   label: const Text('App Preferences'),
-          //   onPressed: () { /* Navigate to PreferencesScreen */ },
-          //   style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50), /*...*/)
-          // ),
+          const SizedBox(height: 12),
+          _buildActionButton(
+            context: context,
+            icon: Icons.lock_outline_rounded,
+            label: 'Şifre Değiştir',
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangePasswordScreen()));
+            },
+          ),
+          const SizedBox(height: 12),
+           _buildActionButton(
+            context: context,
+            icon: Icons.alternate_email_rounded,
+            label: 'E-posta Değiştir',
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangeEmailScreen()));
+            },
+          ),
+           const SizedBox(height: 12),
+          _buildActionButton(
+            context: context,
+            icon: Icons.tune_rounded,
+            label: 'Uygulama Tercihleri',
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PreferencesScreen()));
+            },
+          ),
+           const SizedBox(height: 12),
+          _buildActionButton(
+            context: context,
+            icon: Icons.category_outlined,
+            label: 'Özel Kategorileri Yönet',
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ManageCategoriesScreen()));
+            },
+          ),
         ],
+      ),
+    );
+  }
+
+  // Butonlar için yardımcı bir widget
+  Widget _buildActionButton({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return OutlinedButton.icon(
+      icon: Icon(icon),
+      label: Text(label),
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 50),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        side: BorderSide(color: Theme.of(context).dividerColor),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final User? firebaseUser = ref.watch(currentUserProvider); // Explicitly type User?
+    final User? firebaseUser = ref.watch(currentUserProvider);
     final userProfileAsyncValue = ref.watch(userProfileProvider); 
-    final theme = Theme.of(context);
+    Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Profile'),
+        title: const Text('Profilim'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh Profile',
-            onPressed: () {
-                // ignore: unused_result
-                ref.refresh(userProfileProvider);
-            },
+            onPressed: () => ref.invalidate(userProfileProvider),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
             onPressed: () async {
               await ref.read(authServiceProvider).signOut();
-              if (!context.mounted) return; 
-              Navigator.of(context).popUntil((route) => route.isFirst);
+              if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
             },
           ),
         ],
       ),
       body: firebaseUser == null
-          ? const Center(child: Text('Please log in to view your profile.'))
+          ? const Center(child: Text('Profilinizi görmek için lütfen giriş yapın.'))
           : userProfileAsyncValue.when(
-              data: (UserProfile? userProfile) { // Explicitly type UserProfile?
+              data: (UserProfile? userProfile) {
                 if (userProfile == null) {
-                  return Center( 
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('Profile data not found or could not be loaded.'),
-                          const SizedBox(height: 10),
-                          ElevatedButton(
-                            onPressed: () {
-                              // ignore: unused_result
-                              ref.refresh(userProfileProvider);
-                            },
-                            child: const Text('Retry'),
-                          )
-                        ],
-                      ),
-                    )
-                  );
+                  return Center(child: ElevatedButton(onPressed: () => ref.invalidate(userProfileProvider), child: const Text('Tekrar Dene')));
                 }
-                // firebaseUser is guaranteed non-null here due to the outer check
                 return _buildProfileView(context, firebaseUser, userProfile, ref);
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) { 
-                print("PROFILE_SCREEN: Error UI: $error\n$stackTrace");
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.error_outline, color: theme.colorScheme.error, size: 50),
-                          const SizedBox(height: 10),
-                          Text('Error loading profile: ${error.toString().replaceFirst("Exception: ", "")}', textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error)),
-                          const SizedBox(height:20),
-                          ElevatedButton.icon(
-                              icon: const Icon(Icons.refresh),
-                              label: const Text("Retry"),
-                              onPressed: () {
-                                // ignore: unused_result
-                                ref.refresh(userProfileProvider);
-                              }
-                          )
-                        ],
-                    ),
-                  )
-                );
-              },
+              error: (error, stackTrace) => Center(child: Text('Profil yüklenirken hata oluştu: $error')),
             ),
     );
   }

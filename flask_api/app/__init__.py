@@ -30,6 +30,8 @@ def create_app():
     from .routes.budget_routes import budget_bp
     from .routes.analytics_routes import analytics_bp
     from .routes.ai_routes import ai_bp # AI blueprint'i import ediliyor
+    from .routes.investment_routes import investment_bp
+    from app.routes.finance_test_routes import finance_test_bp
 
     # Diğer blueprint'leri olduğu gibi kaydedin (url_prefix olmadan)
     app.register_blueprint(user_bp)
@@ -40,6 +42,8 @@ def create_app():
     app.register_blueprint(savings_bp)
     app.register_blueprint(budget_bp)
     app.register_blueprint(analytics_bp)
+    app.register_blueprint(investment_bp)
+    app.register_blueprint(finance_test_bp)
     
     # DÜZELTİLMİŞ KISIM: ai_bp'yi url_prefix OLMADAN kaydedin
     app.register_blueprint(ai_bp)

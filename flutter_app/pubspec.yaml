@@ -36,7 +36,7 @@ dependencies:
   flutter_riverpod: ^2.5.1 # Add this
   intl: ^0.19.0 # Add this (useful for later)
   http: ^1.2.1
-
+  percent_indicator: ^4.2.3
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
