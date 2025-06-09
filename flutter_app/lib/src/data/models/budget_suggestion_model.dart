@@ -1,4 +1,4 @@
-// lib/src/data/models/budget_suggestion_model.dart
+// File: lib/src/data/models/budget_suggestion_model.dart
 
 class BudgetSuggestion {
   final double suggestedBudget;

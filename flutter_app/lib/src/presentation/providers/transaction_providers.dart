@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/transaction_model.dart';
 import '../../data/services/transaction_flutter_service.dart';
+import 'auth_providers.dart';
 
-// Hızlı tarih aralıklarını yönetmek için bir enum tanımlıyoruz.
 enum QuickDateRange { thisMonth, lastMonth, last3Months, last6Months, allTime }
 
 class TransactionsState {
@@ -15,8 +15,8 @@ class TransactionsState {
   final DateTime startDate;
   final DateTime endDate;
   final String? filterType;
-  
-  // YENİ: Toplam gelir ve gider için alanlar
+  final String? filterAccount;
+
   final double totalIncome;
   final double totalExpense;
 
@@ -27,6 +27,7 @@ class TransactionsState {
     required this.startDate,
     required this.endDate,
     this.filterType,
+    this.filterAccount,
     this.totalIncome = 0.0,
     this.totalExpense = 0.0,
   });
@@ -38,9 +39,11 @@ class TransactionsState {
     DateTime? startDate,
     DateTime? endDate,
     String? filterType,
+    String? filterAccount,
     double? totalIncome,
     double? totalExpense,
     bool clearError = false,
+    bool clearAccountFilter = false,
   }) {
     return TransactionsState(
       isLoading: isLoading ?? this.isLoading,
@@ -49,6 +52,7 @@ class TransactionsState {
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       filterType: filterType ?? this.filterType,
+      filterAccount: clearAccountFilter ? null : filterAccount ?? this.filterAccount,
       totalIncome: totalIncome ?? this.totalIncome,
       totalExpense: totalExpense ?? this.totalExpense,
     );
@@ -73,9 +77,9 @@ class TransactionsNotifier extends StateNotifier<TransactionsState> {
         startDate: formatter.format(state.startDate),
         endDate: formatter.format(state.endDate),
         type: state.filterType,
+        account: state.filterAccount,
       );
       
-      // YENİ: Toplamları hesaplama
       double income = 0.0;
       double expense = 0.0;
       for (var tx in transactions) {
@@ -118,7 +122,7 @@ class TransactionsNotifier extends StateNotifier<TransactionsState> {
          newStartDate = DateTime(now.year, now.month - 5, 1);
         break;
       case QuickDateRange.allTime:
-         newStartDate = DateTime(2000); // Çok eski bir tarih
+         newStartDate = DateTime(2000);
          break;
     }
     state = state.copyWith(startDate: newStartDate, endDate: newEndDate);
@@ -130,7 +134,13 @@ class TransactionsNotifier extends StateNotifier<TransactionsState> {
   Future<void> deleteTransactionFromList(String id) async { try { await _service.deleteTransaction(id); fetchTransactions(); } catch (e) { rethrow; } }
   void setDateRange(DateTime newStart, DateTime newEnd) { state = state.copyWith(startDate: newStart, endDate: newEnd); fetchTransactions(); }
   void setFilterType(String? type) { state = state.copyWith(filterType: type); fetchTransactions(); }
+  void setAccountFilter(String? accountName) { state = state.copyWith(filterAccount: accountName, clearAccountFilter: accountName == null); fetchTransactions(); }
 }
+
+final transactionServiceProvider = Provider<TransactionFlutterService>((ref) {
+  final userId = ref.watch(currentUserProvider)?.uid;
+  return TransactionFlutterService(userId);
+});
 
 final transactionsProvider = StateNotifierProvider<TransactionsNotifier, TransactionsState>((ref) {
   return TransactionsNotifier(ref.watch(transactionServiceProvider));

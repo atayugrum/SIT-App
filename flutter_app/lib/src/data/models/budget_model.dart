@@ -6,7 +6,7 @@ class BudgetModel {
   final String userId;
   final String category;
   final double limitAmount;
-  final String period; // e.g., 'monthly'
+  final String period;
   final int year;
   final int month;
   final bool isAuto;
@@ -28,7 +28,7 @@ class BudgetModel {
 
   factory BudgetModel.fromMap(Map<String, dynamic> map, String? documentId) {
     return BudgetModel(
-      id: documentId,
+      id: documentId ?? map['id'],
       userId: map['userId'] as String,
       category: map['category'] as String,
       limitAmount: (map['limitAmount'] as num).toDouble(),
@@ -36,12 +36,8 @@ class BudgetModel {
       year: map['year'] as int,
       month: map['month'] as int,
       isAuto: map['isAuto'] as bool? ?? false,
-      createdAt: (map['createdAt'] is Timestamp)
-          ? (map['createdAt'] as Timestamp).toDate()
-          : DateTime.parse(map['createdAt'] as String),
-      updatedAt: (map['updatedAt'] is Timestamp)
-          ? (map['updatedAt'] as Timestamp).toDate()
-          : DateTime.parse(map['updatedAt'] as String),
+      createdAt: map['createdAt'] is Timestamp ? (map['createdAt'] as Timestamp).toDate() : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] is Timestamp ? (map['updatedAt'] as Timestamp).toDate() : DateTime.parse(map['updatedAt'] as String),
     );
   }
 
@@ -54,34 +50,6 @@ class BudgetModel {
       'year': year,
       'month': month,
       'isAuto': isAuto,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
     };
-  }
-
-  BudgetModel copyWith({
-    String? id,
-    String? userId,
-    String? category,
-    double? limitAmount,
-    String? period,
-    int? year,
-    int? month,
-    bool? isAuto,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return BudgetModel(
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
-      category: category ?? this.category,
-      limitAmount: limitAmount ?? this.limitAmount,
-      period: period ?? this.period,
-      year: year ?? this.year,
-      month: month ?? this.month,
-      isAuto: isAuto ?? this.isAuto,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
   }
 }

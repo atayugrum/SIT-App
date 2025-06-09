@@ -1,40 +1,28 @@
 # File: flask_api/app/routes/ai_routes.py
-
 from flask import Blueprint, request, jsonify
 from app.services.ai_service import AIService 
-# Eğer ai_service.py dosyanız yoksa, bu servisi de bir önceki adımlardaki gibi oluşturmalısınız.
-# from app.utils.decorators import token_required # Varsa kullanabilirsiniz
 
-# Blueprint'i tanımlarken tam URL ön ekini burada belirtiyoruz.
-# Bu, __init__.py dosyasını daha temiz tutar.
 ai_bp = Blueprint('ai_bp', __name__, url_prefix='/api/ai')
 
-@ai_bp.route('/recommendations/budget', methods=['GET'])
-# @token_required 
-def get_budget_recommendation_route():
-    """
-    Belirli bir kategori için yapay zeka tabanlı bütçe önerisi sunar.
-    Query params: userId, category
-    """
+@ai_bp.route('/parse-text', methods=['POST'])
+def parse_text_route():
+    data = request.get_json()
+    if not data or 'text' not in data:
+        return jsonify({"success": False, "error": "Lütfen 'text' alanını içeren bir JSON gönderin."}), 400
     try:
-        # Gerçek uygulamada @token_required decorator'ünden gelen kullanıcıyı almalısınız.
-        # user_id = g.user['uid'] 
-        user_id = request.args.get('userId')
-        category = request.args.get('category')
-
-        if not user_id or not category:
-            return jsonify({"error": "userId ve category parametreleri zorunludur."}), 400
-
-        # ai_service.py dosyasındaki servisi çağırıyoruz
-        recommendation = AIService.get_budget_recommendation(user_id, category)
-        
-        return jsonify(recommendation), 200
-
+        result = AIService.parse_transaction_text(data['text'])
+        return jsonify(result), 200
     except Exception as e:
-        return jsonify({"error": "Bütçe önerisi alınırken bir hata oluştu.", "details": str(e)}), 500
+        return jsonify({"success": False, "error": f"Metin işlenirken bir hata oluştu: {str(e)}"}), 500
 
-
-@ai_bp.route('/test', methods=['GET'])
-def test_route():
-    """Bu basit test rotası, blueprint'in doğru çalışıp çalışmadığını kontrol eder."""
-    return jsonify({"message": "AI rotası /api/ai/test üzerinden başarıyla çalışıyor!"}), 200
+@ai_bp.route('/recommendations/budget', methods=['GET'])
+def get_budget_recommendation_route():
+    user_id = request.args.get('userId')
+    category = request.args.get('category')
+    if not user_id or not category:
+        return jsonify({"success": False, "error": "userId ve category parametreleri zorunludur."}), 400
+    try:
+        recommendation = AIService.get_budget_recommendation(user_id, category)
+        return jsonify(recommendation), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Bütçe önerisi alınırken bir hata oluştu: {str(e)}"}), 500

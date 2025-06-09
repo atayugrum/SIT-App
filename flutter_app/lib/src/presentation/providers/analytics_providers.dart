@@ -1,43 +1,31 @@
 // File: lib/src/presentation/providers/analytics_providers.dart
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/analytics_models.dart';
 import '../../data/services/analytics_flutter_service.dart';
 
-final analyticsPeriodProvider = StateProvider<DateTime>((ref) {
-  final now = DateTime.now();
-  return DateTime(now.year, now.month, 1); 
+// Ana Servis
+final analyticsServiceProvider = Provider<AnalyticsFlutterService>((ref) {
+  return AnalyticsFlutterService(ref);
 });
-final analyticsDateRangeProvider = StateProvider<DateTimeRange>((ref) {
-  final now = DateTime.now();
-  final threeMonthsAgo = DateTime(now.year, now.month - 2, 1); 
-  return DateTimeRange(start: threeMonthsAgo, end: now); 
+
+// Tüm dashboard verisini tek seferde çeken ana FutureProvider
+final dashboardInsightsProvider = FutureProvider.autoDispose<DashboardInsightsModel>((ref) {
+  return ref.watch(analyticsServiceProvider).getDashboardInsights();
 });
-final monthlyExpenseSummaryProvider = FutureProvider.autoDispose<MonthlyExpenseSummaryModel>((ref) async {
-  final analyticsService = ref.watch(analyticsServiceProvider);
-  final period = ref.watch(analyticsPeriodProvider);
-  try { return await analyticsService.getMonthlyExpenseSummary(period.year, period.month);
-  } catch (e) { throw Exception("Error fetching monthly expense summary: ${e.toString().replaceFirst("Exception: ", "")}");}
+
+// === Diğer Provider'lar Ana Provider'dan Veri Alır ===
+
+// Gelir/Gider özetini ana veriden seçerek sunar
+final incomeExpenseSummaryProvider = Provider.autoDispose<AsyncValue<IncomeExpenseSummary>>((ref) {
+  return ref.watch(dashboardInsightsProvider).whenData((insights) => insights.incomeExpenseSummary);
 });
-final incomeExpenseAnalysisProvider = FutureProvider.autoDispose<IncomeExpenseAnalysisModel>((ref) async {
-  final analyticsService = ref.watch(analyticsServiceProvider);
-  final period = ref.watch(analyticsPeriodProvider);
-  try { return await analyticsService.getIncomeExpenseAnalysis(period.year, period.month);
-  } catch (e) { throw Exception("Error fetching income/expense analysis: ${e.toString().replaceFirst("Exception: ", "")}");}
+
+// İstek/İhtiyaç özetini ana veriden seçerek sunar
+final needsVsWantsProvider = Provider.autoDispose<AsyncValue<NeedsVsWantsModel>>((ref) {
+  return ref.watch(dashboardInsightsProvider).whenData((insights) => insights.needsVsWantsSummary);
 });
-final spendingTrendProvider = FutureProvider.autoDispose.family<SpendingTrendModel, String>((ref, periodParam) async {
-  final analyticsService = ref.watch(analyticsServiceProvider);
-  try { return await analyticsService.getSpendingTrend(period: periodParam);
-  } catch (e) { throw Exception("Error fetching spending trend for $periodParam: ${e.toString().replaceFirst("Exception: ", "")}");}
-});
-final categoryTrendDataProvider = FutureProvider.autoDispose<CategoryTrendDataModel>((ref) async {
-  final analyticsService = ref.watch(analyticsServiceProvider);
-  final dateRange = ref.watch(analyticsDateRangeProvider);
-  try { return await analyticsService.getCategoryTrendData(startDate: dateRange.start, endDate: dateRange.end);
-  } catch (e) { throw Exception("Error fetching category trend data: ${e.toString().replaceFirst("Exception: ", "")}");}
-});
-final dashboardInsightsProvider = FutureProvider.autoDispose<DashboardInsightsModel>((ref) async {
-  final analyticsService = ref.watch(analyticsServiceProvider);
-  try { return await analyticsService.getDashboardInsights();
-  } catch (e) { throw Exception("Error fetching dashboard insights: ${e.toString().replaceFirst("Exception: ", "")}");}
+
+// Duygu özetini ana veriden seçerek sunar
+final emotionSummaryProvider = Provider.autoDispose<AsyncValue<List<EmotionSpendingItem>>>((ref) {
+  return ref.watch(dashboardInsightsProvider).whenData((insights) => insights.emotionSummary);
 });

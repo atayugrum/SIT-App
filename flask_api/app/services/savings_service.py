@@ -13,81 +13,82 @@ class InsufficientFundsError(Exception):
 class SavingsService:
     @staticmethod
     def _update_total_savings_balance(user_id, amount_delta):
-        if db is None: raise Exception("Firestore client not initialized.")
         user_savings_ref = db.collection('user_savings_balances').document(user_id)
-
-        @firestore.transactional
-        def update_in_tx(transaction, doc_ref, delta):
-            snapshot = doc_ref.get(transaction=transaction)
-            current_total = 0
-            if snapshot.exists:
-                current_total = snapshot.to_dict().get('totalSavingsBalance', 0.0)
-
-            new_balance = current_total + delta
-            payload = {
-                'totalSavingsBalance': new_balance,
-                'updatedAt': datetime.now(timezone.utc).isoformat()
-            }
-            if not snapshot.exists: 
-                payload['userId'] = user_id
-
-            transaction.set(doc_ref, payload, merge=True) 
-
-        transaction_obj = db.transaction()
-        update_in_tx(transaction_obj, user_savings_ref, amount_delta)
+        # Atomik artırma/azaltma işlemi
+        user_savings_ref.set({
+            'totalSavingsBalance': firestore.Increment(amount_delta),
+            'updatedAt': datetime.now(timezone.utc).isoformat()
+        }, merge=True)
         print(f"SAVINGS_SERVICE: User {user_id} total savings balance updated by {amount_delta}.")
 
-
     @staticmethod
-    def create_savings_allocation(user_id, transaction_id, amount, date_str, source='auto'):
+    def create_savings_allocation(user_id, transaction_id, amount, date_str):
         try:
-            if db is None: raise Exception("Firestore client not initialized.")
-            if amount <= 0 and source == 'manual':
-                return {"success": False, "message": "Manual savings amount must be positive."}
-
-            if amount <= 0 and source == 'auto':
-                return {"success": True, "message": "No savings allocation created, amount was zero or less."}
-
-            print(f"SAVINGS_SERVICE: Creating {source} allocation for user {user_id}, tx_id: {transaction_id}, amount: {amount}, date: {date_str}")
+            if amount <= 0: return
             allocation_doc_ref = db.collection('savings_allocations').document()
             allocation_data = {
-                'userId': user_id,
-                'transactionId': transaction_id,
-                'amount': float(amount),
-                'date': date_str, 
-                'source': source,
-                'createdAt': datetime.now(timezone.utc).isoformat()
+                'userId': user_id, 'transactionId': transaction_id, 'amount': float(amount),
+                'date': date_str, 'source': 'auto', 'createdAt': datetime.now(timezone.utc).isoformat()
             }
             allocation_doc_ref.set(allocation_data)
             SavingsService._update_total_savings_balance(user_id, float(amount))
-            created_allocation = allocation_data.copy()
-            created_allocation['id'] = allocation_doc_ref.id
-            print(f"SAVINGS_SERVICE: {source} savings allocation created (ID: {allocation_doc_ref.id}) and total balance updated for user {user_id}.")
-            return {"success": True, "message": f"{source.capitalize()} savings allocation created.", "allocation": created_allocation}
+            print(f"SAVINGS_SERVICE: Auto savings allocation created for tx {transaction_id}.")
         except Exception as e:
-            print(f"SAVINGS_SERVICE: Error creating {source} savings allocation for {user_id}, tx {transaction_id}: {e}")
-            traceback.print_exc()
-            raise 
+            print(f"SAVINGS_SERVICE: Error creating auto savings allocation: {e}")
+            raise
 
     @staticmethod
-    def delete_savings_allocation_by_transaction_id(user_id, transaction_id, amount_to_revert_from_balance):
+    def delete_savings_allocation_by_transaction_id(user_id, transaction_id):
         try:
-            if db is None: raise Exception("Firestore client not initialized.")
             alloc_query = db.collection('savings_allocations').where('userId', '==', user_id).where('transactionId', '==', transaction_id)
             alloc_docs = list(alloc_query.stream())
-
-            if not alloc_docs:
-                return {"success": True, "message": "No relevant auto savings allocation to delete."}
-
-            deleted_count = 0
-            for doc in alloc_docs:
-                doc.reference.delete()
-                deleted_count +=1
-
-            if deleted_count > 0:
-                SavingsService._update_total_savings_balance(user_id, -float(amount_to_revert_from_balance))
-            return {"success": True, "message": f"{deleted_count} auto allocations deleted."}
+            if not alloc_docs: return
+            
+            amount_to_revert = alloc_docs[0].to_dict().get('amount', 0.0)
+            alloc_docs[0].reference.delete()
+            
+            if amount_to_revert > 0:
+                SavingsService._update_total_savings_balance(user_id, -float(amount_to_revert))
+            print(f"SAVINGS_SERVICE: Deleted savings allocation for tx {transaction_id}.")
         except Exception as e:
+            traceback.print_exc()
+            raise
+
+    @staticmethod
+    def update_or_delete_allocation_for_transaction(user_id, transaction_id, new_allocated_amount, new_date_str):
+        """
+        Bir işlem güncellendiğinde, ona bağlı tasarruf kaydını günceller, oluşturur veya siler.
+        """
+        try:
+            alloc_query = db.collection('savings_allocations').where('transactionId', '==', transaction_id).limit(1)
+            existing_alloc_docs = list(alloc_query.stream())
+            
+            old_allocated_amount = 0.0
+            existing_alloc_ref = None
+
+            if existing_alloc_docs:
+                existing_alloc_ref = existing_alloc_docs[0].reference
+                old_allocated_amount = existing_alloc_docs[0].to_dict().get('amount', 0.0)
+
+            delta = new_allocated_amount - old_allocated_amount
+
+            if delta == 0 and not existing_alloc_ref: return # Değişiklik yok ve kayıt da yok
+
+            if new_allocated_amount > 0:
+                if existing_alloc_ref: # Kayıt varsa güncelle
+                    existing_alloc_ref.update({'amount': new_allocated_amount, 'date': new_date_str})
+                else: # Kayıt yoksa oluştur
+                    SavingsService.create_savings_allocation(user_id, transaction_id, new_allocated_amount, new_date_str)
+                    return # Bakiye zaten create içinde güncellendiği için çık
+            elif existing_alloc_ref: # Yeni alokasyon 0 veya daha azsa ve eskiden kayıt varsa, sil
+                existing_alloc_ref.delete()
+
+            # Toplam kumbara bakiyesini fark kadar güncelle
+            if delta != 0:
+                SavingsService._update_total_savings_balance(user_id, delta)
+
+        except Exception as e:
+            print(f"SAVINGS_SERVICE: Error updating allocation for tx {transaction_id}: {e}")
             traceback.print_exc()
             raise
 

@@ -3,6 +3,7 @@
 # Eğer Flutter tarafında da environment dosyası varsa
 /lib/src/utils/.env
 /lib/src/config.dart
+C:\Users\atayu\SIT_App_Project\flask_api\.env
 
 # Genel şifre/anahtar dosyaları
 *.key

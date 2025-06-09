@@ -9,6 +9,7 @@ import '../../providers/analytics_providers.dart';
 import '../../../data/models/transaction_model.dart';
 import 'transaction_card.dart';
 import 'transaction_flow_screen.dart';
+import 'batch_transaction_screen.dart'; // YENİ: Batch ekranı import edildi
 
 class TransactionsScreen extends ConsumerWidget {
   const TransactionsScreen({super.key});
@@ -71,21 +72,30 @@ class TransactionsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Transactions'),
-        automaticallyImplyLeading: false, // MainScreen'in bir parçası olduğu için geri tuşu yok
+        automaticallyImplyLeading: false, 
+        // DÜZENLEME: AppBar'a actions butonu eklendi
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_rounded),
+            tooltip: 'AI ile Hızlı Giriş',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const BatchTransactionScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // YENİ: Özet Kartı
           _SummaryCard(
             totalIncome: transactionsState.totalIncome,
             totalExpense: transactionsState.totalExpense,
             isLoading: transactionsState.isLoading,
           ),
-          // YENİ: Filtreleme Çubuğu
           _FilterBar(),
           const Divider(height: 1, thickness: 1),
 
-          // İşlem Listesi
           Expanded(
             child: transactionsState.isLoading && transactionsState.transactions.isEmpty
                 ? const Center(child: CircularProgressIndicator())
@@ -173,7 +183,6 @@ class _FilterBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Seçili filtreye göre chip'i renklendirmek için mevcut aralığı alalım
     final currentStartDate = ref.watch(transactionsProvider.select((s) => s.startDate));
     final currentEndDate = ref.watch(transactionsProvider.select((s) => s.endDate));
 
@@ -209,10 +218,9 @@ class _FilterBar extends ConsumerWidget {
   
   Widget _buildQuickFilterChip(BuildContext context, WidgetRef ref, String label, QuickDateRange range, DateTime currentStart, DateTime currentEnd) {
     bool isSelected = false;
-    // Hangi chip'in seçili olduğunu anlamak için basit bir kontrol
     final now = DateTime.now();
     DateTime checkStart;
-    // Removed unused variable 'checkEnd'
+    
     switch(range) {
         case QuickDateRange.thisMonth:
             checkStart = DateTime(now.year, now.month, 1);
@@ -239,7 +247,7 @@ class _FilterBar extends ConsumerWidget {
         label: Text(label),
         selected: isSelected,
         onSelected: (bool selected) {
-          if (selected) { // Sadece seçildiğinde işlem yap
+          if (selected) {
             ref.read(transactionsProvider.notifier).setQuickDateRange(range);
           }
         },
