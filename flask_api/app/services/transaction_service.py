@@ -6,25 +6,14 @@ import traceback
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 import uuid
-
-# Diğer servislerle etkileşim için import ediyoruz
 from .balance_service import BalanceService
 from .savings_service import SavingsService
 
-
 class TransactionService:
     @staticmethod
-    def list_transactions(user_id, start_date_str, end_date_str, type=None, account=None):
-        """
-        Belirtilen tarih aralığında ve opsiyonel filtrelerle işlemleri listeler.
-        Silinmemiş (isDeleted=False) kayıtları getirir.
-        """
+    def list_transactions(user_id, start_date_str, end_date_str, type_filter=None, account_filter=None):
         try:
-            if db is None:
-                raise Exception("Firestore client (db) is not initialized.")
-
             transactions_ref = db.collection('transactions')
-            # Temel filtreler
             query = (
                 transactions_ref
                 .where(filter=FieldFilter('userId', '==', user_id))
@@ -32,157 +21,152 @@ class TransactionService:
                 .where(filter=FieldFilter('date', '<=', end_date_str))
                 .where(filter=FieldFilter('isDeleted', '==', False))
             )
-
-            # Opsiyonel filtreler
-            if type:
-                query = query.where(filter=FieldFilter('type', '==', type))
-            if account:
-                query = query.where(filter=FieldFilter('account', '==', account))
-
-            # Sıralama
-            query = query.order_by('date', direction=firestore.Query.DESCENDING).order_by('createdAt', direction=firestore.Query.DESCENDING)
+            if type_filter and type_filter in ['income', 'expense', 'transfer_in', 'transfer_out']: 
+                query = query.where(filter=FieldFilter('type', '==', type_filter))
             
+            # Not: Bu sorgu, 'account' alanının bir dizin gerektirmesini önlemek için
+            # Python tarafında filtreleme yapar. Büyük veri setlerinde verimsiz olabilir.
             docs = list(query.stream())
-            transactions_list = []
-            for doc in docs:
-                data = doc.to_dict()
-                data['id'] = doc.id
-                transactions_list.append(data)
+            
+            transactions_list = [{'id': doc.id, **doc.to_dict()} for doc in docs]
 
-            print(f"Fetched {len(transactions_list)} non-deleted transactions for user {user_id}")
+            if account_filter:
+                # Düzeltme: Filtreleme hem accountId hem de eski account (name) alanına göre yapılabilir.
+                # İdeali, UI'dan accountId gönderilmesidir.
+                transactions_list = [tx for tx in transactions_list if tx.get('account') == account_filter or tx.get('accountId') == account_filter]
+
+            # Sıralamayı Python tarafında yapıyoruz
+            transactions_list.sort(key=lambda x: (x.get('date', ''), x.get('createdAt', '')), reverse=True)
+            
             return {"success": True, "transactions": transactions_list}, 200
-
         except Exception as e:
-            print(f"Error listing transactions for user {user_id}: {e}")
             traceback.print_exc()
-            return {"success": False, "error": f"An internal error occurred: {str(e)}"}, 500
+            return {"success": False, "error": f"Internal server error: {str(e)}"}, 500
 
     @staticmethod
     def create_transaction(data):
-        """
-        Yeni bir gelir/gider işlemi oluşturur ve ilgili servisleri tetikler.
-        """
         try:
-            required_fields = ['userId', 'type', 'category', 'amount', 'date', 'account']
-            for field in required_fields:
-                if field not in data or data[field] is None:
-                    return {"success": False, "error": f"Missing required field: {field}"}, 400
+            # DÜZELTME: Frontend'den 'account' olarak gelen ID'yi 'accountId' olarak kabul et
+            if 'account' in data and 'accountId' not in data:
+                data['accountId'] = data.pop('account')
+
+            required_fields = ['userId', 'type', 'category', 'amount', 'date', 'accountId']
+            if not all(field in data and data[field] is not None for field in required_fields):
+                return {"success": False, "error": "Zorunlu alanlar eksik."}, 400
 
             doc_ref = db.collection('transactions').document()
             amount = float(data.get('amount', 0.0))
-            income_allocation_pct = data.get('incomeAllocationPct')
-            allocated_to_savings = 0.0
-
-            if data['type'] == 'income' and income_allocation_pct is not None and int(income_allocation_pct) > 0:
-                allocated_to_savings = round(amount * (int(income_allocation_pct) / 100), 2)
-
-            transaction_data = data.copy()
-            transaction_data.update({
-                'isDeleted': False,
-                'createdAt': datetime.now(timezone.utc).isoformat(),
+            
+            transaction_data = {
+                'userId': data['userId'], 'type': data['type'], 'category': data['category'],
+                'subCategory': data.get('subCategory'), 'amount': amount, 'date': data['date'],
+                'accountId': data['accountId'], # Düzeltildi: Artık her zaman accountId var
+                'description': data.get('description'), 'isRecurring': data.get('isRecurring', False),
+                'recurrenceRule': data.get('recurrenceRule'), 'isNeed': data.get('isNeed'),
+                'emotion': data.get('emotion'), 'incomeAllocationPct': data.get('incomeAllocationPct'),
+                'isDeleted': False, 'createdAt': datetime.now(timezone.utc).isoformat(),
                 'updatedAt': datetime.now(timezone.utc).isoformat()
-            })
+            }
             doc_ref.set(transaction_data)
-            print(f"TRANSACTION_SERVICE: Created transaction with ID {doc_ref.id}")
-
+            
+            # DÜZELTME: Bakiye güncelleme fonksiyonu doğru parametrelerle çağrılıyor
             BalanceService.update_balance_on_new_transaction(
-                user_id=data['userId'],
-                account_name=data['account'],
-                amount=amount,
-                transaction_type=data['type'],
-                allocated_to_savings=allocated_to_savings
+                data['userId'], 
+                data['accountId'], 
+                amount, 
+                data['type'], 
+                data.get('incomeAllocationPct', 0)
             )
             
-            if allocated_to_savings > 0:
-                SavingsService.create_savings_allocation(
-                    user_id=data['userId'], transaction_id=doc_ref.id,
-                    amount=allocated_to_savings, date_str=data['date']
-                )
-
             transaction_data['id'] = doc_ref.id
             return {"success": True, "transaction": transaction_data}, 201
+        except Exception as e:
+            traceback.print_exc()
+            return {"success": False, "error": f"Internal server error: {str(e)}"}, 500
 
+    @staticmethod
+    def create_transfer(data):
+        try:
+            required_fields = ['userId', 'sourceAccountId', 'destinationAccountId', 'amount', 'date']
+            if not all(field in data for field in required_fields):
+                return {"success": False, "error": "Transfer için zorunlu alanlar eksik."}, 400
+
+            user_id, source_id, dest_id, amount, date_str = data['userId'], data['sourceAccountId'], data['destinationAccountId'], float(data['amount']), data['date']
+            description = data.get('description', 'Hesaplar Arası Transfer')
+            transfer_id = str(uuid.uuid4())
+
+            source_acc_doc = db.collection('user_accounts').document(source_id).get()
+            dest_acc_doc = db.collection('user_accounts').document(dest_id).get()
+            if not source_acc_doc.exists or not dest_acc_doc.exists:
+                raise ValueError("Kaynak veya hedef hesap bulunamadı.")
+            
+            source_acc_name = source_acc_doc.to_dict().get('accountName')
+            dest_acc_name = dest_acc_doc.to_dict().get('accountName')
+            
+            db_transaction = db.transaction()
+            BalanceService.process_transfer(db_transaction, user_id, source_id, dest_id, amount)
+
+            batch = db.batch()
+            source_tx_ref = db.collection('transactions').document()
+            source_tx_data = {'userId': user_id, 'type': 'transfer_out', 'category': 'Transfer', 'amount': amount, 'date': date_str, 'account': source_acc_name, 'accountId': source_id, 'description': f"{dest_acc_name} hesabına transfer", 'isDeleted': False, 'transferId': transfer_id, 'createdAt': datetime.now(timezone.utc).isoformat(), 'updatedAt': datetime.now(timezone.utc).isoformat()}
+            batch.set(source_tx_ref, source_tx_data)
+            
+            dest_tx_ref = db.collection('transactions').document()
+            dest_tx_data = {'userId': user_id, 'type': 'transfer_in', 'category': 'Transfer', 'amount': amount, 'date': date_str, 'account': dest_acc_name, 'accountId': dest_id, 'description': f"{source_acc_name} hesabından transfer", 'isDeleted': False, 'transferId': transfer_id, 'createdAt': datetime.now(timezone.utc).isoformat(), 'updatedAt': datetime.now(timezone.utc).isoformat()}
+            batch.set(dest_tx_ref, dest_tx_data)
+            
+            batch.commit()
+            
+            return {"success": True, "message": "Transfer başarıyla tamamlandı."}, 201
         except Exception as e:
             traceback.print_exc()
             return {"success": False, "error": f"Internal server error: {str(e)}"}, 500
 
     @staticmethod
     def update_transaction(transaction_id, data):
-        """
-        Mevcut işlemi günceller; BalanceService ve SavingsService metotlarını çağırır.
-        """
         try:
             doc_ref = db.collection('transactions').document(transaction_id)
             existing_doc = doc_ref.get()
             if not existing_doc.exists:
-                return {"success": False, "error": "Transaction not found"}, 404
-
+                return {"success": False, "error": "İşlem bulunamadı."}, 404
+            
             old_data = existing_doc.to_dict()
-            user_id = old_data.get('userId')
 
-            # 1. ESKİ İŞLEMİN ETKİLERİNİ GERİ AL
-            BalanceService._revert_transaction_effect(user_id, old_data)
-            if old_data.get('type') == 'income' and old_data.get('incomeAllocationPct', 0) > 0:
-                SavingsService.delete_savings_allocation_by_transaction_id(user_id, transaction_id)
-            
-            # 2. YENİ VERİYİ OLUŞTUR VE KAYDET
-            new_amount = float(data.get('amount', old_data.get('amount')))
-            new_type = data.get('type', old_data.get('type'))
-            new_income_pct = data.get('incomeAllocationPct', old_data.get('incomeAllocationPct'))
+            # DÜZELTME: Gelen veride de 'account' -> 'accountId' dönüşümü yap
+            if 'account' in data and 'accountId' not in data:
+                data['accountId'] = data.pop('account')
 
-            new_allocated = 0.0
-            if new_type == 'income' and new_income_pct is not None and int(new_income_pct) > 0:
-                new_allocated = round(new_amount * (int(new_income_pct) / 100), 2)
+            # BalanceService'i eski ve yeni veriyle çağırarak bakiye tutarlılığını sağla
+            BalanceService.update_balance_on_update_transaction(old_data['userId'], old_data, data)
             
-            update_payload = old_data.copy()
-            update_payload.update(data)
+            update_payload = data.copy()
             update_payload['updatedAt'] = datetime.now(timezone.utc).isoformat()
-            
             doc_ref.update(update_payload)
-            
-            # 3. YENİ İŞLEMİN ETKİLERİNİ UYGULA
-            new_data = doc_ref.get().to_dict()
-            BalanceService._apply_transaction_effect(user_id, new_data)
-
-            if new_allocated > 0:
-                # Not: Bu basitçe yenisini oluşturur. Daha karmaşık senaryoda update mantığı gerekir.
-                SavingsService.create_savings_allocation(
-                    user_id=user_id, transaction_id=transaction_id,
-                    amount=new_allocated, date_str=new_data.get('date')
-                )
             
             updated_doc = doc_ref.get().to_dict()
             updated_doc['id'] = transaction_id
             return {"success": True, "transaction": updated_doc}, 200
-
         except Exception as e:
             traceback.print_exc()
             return {"success": False, "error": f"Internal server error: {str(e)}"}, 500
 
     @staticmethod
     def delete_transaction(user_id, transaction_id):
-        """
-        Bir işlemi silinmiş olarak işaretler ve ilgili servisleri tetikler.
-        """
         try:
             doc_ref = db.collection('transactions').document(transaction_id)
             doc = doc_ref.get()
-            if not doc.exists: return {"success": False, "error": "Transaction not found"}, 404
+            if not doc.exists: return {"success": True, "message": "İşlem zaten silinmiş."}, 200
             
             txn = doc.to_dict()
-            if txn.get('userId') != user_id: return {"success": False, "error": "Not authorized"}, 403
-            if txn.get('isDeleted') == True: return {"success": True, "message": "Transaction already deleted."}, 200
+            if txn.get('userId') != user_id: return {"success": False, "error": "Yetkisiz işlem."}, 403
+            if txn.get('isDeleted') == True: return {"success": True, "message": "İşlem zaten silinmiş."}, 200
 
-            # 1. Bakiyeleri ve tasarrufları geri al
-            BalanceService._revert_transaction_effect(user_id, txn)
-            if txn.get('type') == 'income' and txn.get('incomeAllocationPct', 0) > 0:
-                SavingsService.delete_savings_allocation_by_transaction_id(user_id, transaction_id)
-
-            # 2. İşlemi silinmiş olarak işaretle
-            doc_ref.update({'isDeleted': True, 'updatedAt': datetime.now(timezone.utc).isoformat()})
+            # DÜZELTME: BalanceService'i doğru parametrelerle çağır
+            allocated_pct = txn.get('incomeAllocationPct', 0) if txn['type'] == 'income' else 0
+            BalanceService.update_balance_on_delete_transaction(user_id, txn['accountId'], txn['amount'], txn['type'], allocated_pct)
             
-            return {"success": True, "message": "Transaction deleted successfully."}, 200
-
+            doc_ref.update({'isDeleted': True, 'updatedAt': datetime.now(timezone.utc).isoformat()})
+            return {"success": True, "message": "İşlem başarıyla silindi."}, 200
         except Exception as e:
             traceback.print_exc()
             return {"success": False, "error": f"Internal server error: {str(e)}"}, 500

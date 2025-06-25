@@ -10,7 +10,8 @@ class SavingsGoalsScreen extends ConsumerWidget {
   const SavingsGoalsScreen({super.key});
 
   // DÜZELTİLMİŞ DİYALOG FONKSİYONU
-  void _showAllocateDialog(BuildContext context, WidgetRef ref, String goalId, String goalTitle) {
+  void _showAllocateDialog(
+      BuildContext context, WidgetRef ref, String goalId, String goalTitle) {
     final amountController = TextEditingController();
     // StatefulBuilder, sadece diyalog içindeki state'i yönetmemizi sağlar.
     showDialog(
@@ -25,53 +26,73 @@ class SavingsGoalsScreen extends ConsumerWidget {
               content: TextField(
                 controller: amountController,
                 autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Aktarılacak Tutar',
                   prefixText: '₺ ',
-                  enabled: !isAllocating, // İşlem sırasında giriş alanını kilitle
+                  enabled:
+                      !isAllocating, // İşlem sırasında giriş alanını kilitle
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: isAllocating ? null : () => Navigator.of(context).pop(),
+                  onPressed:
+                      isAllocating ? null : () => Navigator.of(context).pop(),
                   child: const Text('İptal'),
                 ),
                 ElevatedButton(
-                  onPressed: isAllocating ? null : () async {
-                    final amount = double.tryParse(amountController.text);
-                    if (amount == null || amount <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Lütfen geçerli bir tutar girin.'), backgroundColor: Colors.orange)
-                      );
-                      return;
-                    }
-                    
-                    setState(() => isAllocating = true); // Yükleniyor durumunu başlat
+                  onPressed: isAllocating
+                      ? null
+                      : () async {
+                          final amount = double.tryParse(amountController.text);
+                          if (amount == null || amount <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content:
+                                        Text('Lütfen geçerli bir tutar girin.'),
+                                    backgroundColor: Colors.orange));
+                            return;
+                          }
 
-                    try {
-                      await ref.read(savingsGoalNotifierProvider.notifier).allocateToGoal(
-                        goalId: goalId,
-                        amount: amount,
-                      );
+                          setState(() => isAllocating =
+                              true); // Yükleniyor durumunu başlat
 
-                      if (!context.mounted) return;
-                      Navigator.of(context).pop(); // Önce diyaloğu kapat
-                      ScaffoldMessenger.of(context).showSnackBar( // Sonra başarı mesajını göster
-                        const SnackBar(content: Text('Para hedefe başarıyla aktarıldı!'), backgroundColor: Colors.green),
-                      );
+                          try {
+                            await ref
+                                .read(savingsGoalNotifierProvider.notifier)
+                                .allocateToGoal(
+                                  goalId: goalId,
+                                  amount: amount,
+                                );
 
-                    } catch (e) {
-                      if (!context.mounted) return;
-                      Navigator.of(context).pop(); // Hata durumunda da diyaloğu kapat
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Hata: ${e.toString().replaceAll("Exception: ", "")}"), backgroundColor: Colors.red),
-                      );
-                    }
-                    // setState'i tekrar çağırmaya gerek yok çünkü diyalog kapanıyor.
-                  },
-                  child: isAllocating 
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop(); // Önce diyaloğu kapat
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              // Sonra başarı mesajını göster
+                              const SnackBar(
+                                  content:
+                                      Text('Para hedefe başarıyla aktarıldı!'),
+                                  backgroundColor: Colors.green),
+                            );
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            Navigator.of(context)
+                                .pop(); // Hata durumunda da diyaloğu kapat
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      "Hata: ${e.toString().replaceAll("Exception: ", "")}"),
+                                  backgroundColor: Colors.red),
+                            );
+                          }
+                          // setState'i tekrar çağırmaya gerek yok çünkü diyalog kapanıyor.
+                        },
+                  child: isAllocating
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Aktar'),
                 ),
               ],
@@ -82,70 +103,85 @@ class SavingsGoalsScreen extends ConsumerWidget {
     );
   }
 
-  void _showDeleteConfirmDialog(BuildContext context, WidgetRef ref, String goalId, String goalTitle) {
-     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hedefi Sil'),
-        content: Text('"$goalTitle" hedefini silmek istediğinize emin misiniz? Hedefe aktarılan tutar ana kumbaranıza geri dönecektir.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('İptal')),
-          TextButton(
-            onPressed: () async {
-              try {
-                await ref.read(savingsGoalNotifierProvider.notifier).deleteGoal(goalId);
-                if (context.mounted) Navigator.of(context).pop();
-              } catch (e) {
-                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: $e"), backgroundColor: Colors.red));
-                 }
-              }
-            },
-            child: const Text('Sil', style: TextStyle(color: Colors.red)),
-          )
-        ],
-      )
-    );
+  void _showDeleteConfirmDialog(
+      BuildContext context, WidgetRef ref, String goalId, String goalTitle) {
+    showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('Hedefi Sil'),
+              content: Text(
+                  '"$goalTitle" hedefini silmek istediğinize emin misiniz? Hedefe aktarılan tutar ana kumbaranıza geri dönecektir.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('İptal')),
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await ref
+                          .read(savingsGoalNotifierProvider.notifier)
+                          .deleteGoal(goalId);
+                      if (context.mounted) Navigator.of(context).pop();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text("Hata: $e"),
+                            backgroundColor: Colors.red));
+                      }
+                    }
+                  },
+                  child: const Text('Sil', style: TextStyle(color: Colors.red)),
+                )
+              ],
+            ));
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final goalsAsync = ref.watch(savingsGoalsProvider);
+    final primaryColor = Colors.teal.shade700;
+
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         title: const Text('Tasarruf Hedeflerim'),
+        backgroundColor: Colors.grey.shade100,
+        elevation: 0,
+        foregroundColor: Colors.grey.shade800,
         actions: [
           IconButton(
-            onPressed: () => ref.refresh(savingsGoalsProvider),
-            icon: const Icon(Icons.refresh),
-          ),
+              onPressed: () => ref.invalidate(savingsGoalsProvider),
+              icon: const Icon(Icons.refresh))
         ],
       ),
       body: goalsAsync.when(
         data: (goals) {
           if (goals.isEmpty) {
             return RefreshIndicator(
-                onRefresh: () async => ref.refresh(savingsGoalsProvider),
-                child: ListView(children: const [Center(child: Padding(
-                  padding: EdgeInsets.all(50.0),
-                  child: Text('Henüz bir tasarruf hedefi oluşturmadınız.'),
-                ))])
-            );
+                onRefresh: () async => ref.invalidate(savingsGoalsProvider),
+                child: ListView(children: const [
+                  Center(
+                      child: Padding(
+                    padding: EdgeInsets.all(50.0),
+                    child: Text('Henüz bir tasarruf hedefi oluşturmadınız.'),
+                  ))
+                ]));
           }
           return RefreshIndicator(
-            onRefresh: () async => ref.refresh(savingsGoalsProvider),
+            onRefresh: () async => ref.invalidate(savingsGoalsProvider),
             child: ListView.builder(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(12.0),
               itemCount: goals.length,
               itemBuilder: (context, index) {
                 final goal = goals[index];
                 return SavingsGoalCard(
                   goal: goal,
-                  onAllocate: () => _showAllocateDialog(context, ref, goal.id, goal.title),
-                  onDelete: () => _showDeleteConfirmDialog(context, ref, goal.id, goal.title),
-                  onEdit: () {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => SavingsGoalFormScreen(goalToEdit: goal)));
-                  },
+                  onAllocate: () =>
+                      _showAllocateDialog(context, ref, goal.id, goal.title),
+                  onDelete: () => _showDeleteConfirmDialog(
+                      context, ref, goal.id, goal.title),
+                  onEdit: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => SavingsGoalFormScreen(goalToEdit: goal))),
                 );
               },
             ),
@@ -155,9 +191,9 @@ class SavingsGoalsScreen extends ConsumerWidget {
         error: (err, stack) => Center(child: Text('Hata: $err')),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SavingsGoalFormScreen()));
-        },
+        onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SavingsGoalFormScreen())),
+        backgroundColor: primaryColor,
         child: const Icon(Icons.add),
         tooltip: 'Yeni Hedef Ekle',
       ),

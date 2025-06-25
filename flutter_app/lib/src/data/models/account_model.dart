@@ -8,10 +8,14 @@ class AccountModel {
   final double initialBalance;
   final double currentBalance;
   final String currency;
-  final String? category; // Yatırım hesapları için kategori
+  final String? category;
   final DateTime createdAt;
   final DateTime? updatedAt;
   final bool isArchived;
+  // YENİ: Kredi kartı için opsiyonel alanlar
+  final double? creditLimit;
+  final int? statementDay;
+  final int? dueDateDay;
 
   AccountModel({
     required this.id,
@@ -25,18 +29,10 @@ class AccountModel {
     required this.createdAt,
     this.updatedAt,
     required this.isArchived,
+    this.creditLimit,
+    this.statementDay,
+    this.dueDateDay,
   });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'userId': userId,
-      'accountName': accountName,
-      'accountType': accountType,
-      'initialBalance': initialBalance,
-      'currency': currency,
-      'category': category,
-    };
-  }
 
   factory AccountModel.fromMap(Map<String, dynamic> map) {
     return AccountModel(
@@ -48,9 +44,16 @@ class AccountModel {
       currentBalance: (map['currentBalance'] as num?)?.toDouble() ?? 0.0,
       currency: map['currency'] as String? ?? 'TRY',
       category: map['category'] as String?,
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
-      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
+      createdAt: map['createdAt'] != null
+          ? DateTime.parse(map['createdAt'])
+          : DateTime.now(),
+      updatedAt:
+          map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
       isArchived: map['isArchived'] as bool? ?? false,
+      // YENİ: Kredi kartı alanlarını map'ten oku
+      creditLimit: (map['creditLimit'] as num?)?.toDouble(),
+      statementDay: map['statementDay'] as int?,
+      dueDateDay: map['dueDateDay'] as int?,
     );
   }
 }

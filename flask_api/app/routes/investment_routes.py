@@ -1,15 +1,9 @@
 # File: flask_api/app/routes/investment_routes.py
 from flask import Blueprint, request, jsonify
 from app.services.investment_service import InvestmentService
+from app.services.user_service import UserService
 
 investment_bp = Blueprint('investment_bp', __name__, url_prefix='/api/investments')
-
-@investment_bp.route('/accounts', methods=['GET'])
-def list_accounts_route():
-    user_id = request.args.get('userId') 
-    if not user_id: return jsonify({"success": False, "error": "Missing userId"}), 400
-    result, status_code = InvestmentService.list_accounts(user_id)
-    return jsonify(result), status_code
 
 @investment_bp.route('/portfolio', methods=['GET'])
 def get_portfolio_summary_route():
@@ -21,10 +15,26 @@ def get_portfolio_summary_route():
 @investment_bp.route('/analysis/<string:symbol>', methods=['GET'])
 def get_asset_analysis_route(symbol):
     if not symbol: return jsonify({"success": False, "error": "Asset symbol is required."}), 400
-    result, status_code = InvestmentService.get_asset_analysis(symbol.upper())
+    user_id = request.args.get('userId')
+    risk_profile = 'medium' 
+    if user_id:
+        profile_data = UserService.get_user_profile(user_id)
+        if profile_data.get("success"):
+            risk_profile = profile_data["profile"].get("riskProfile", "medium")
+
+    result, status_code = InvestmentService.get_asset_analysis(symbol.upper(), risk_profile)
     return jsonify(result), status_code
 
-# --- İŞLEM (TRANSACTION) ROTALARI ---
+@investment_bp.route('/opportunities', methods=['POST'])
+def get_opportunities_route():
+    data = request.get_json()
+    user_id = data.get('userId')
+    market = data.get('market', 'bist')
+    horizon = data.get('horizon', 'midTerm')
+    if not user_id:
+        return jsonify({"success": False, "error": "userId zorunludur."}), 400
+    result, status_code = InvestmentService.get_opportunities(user_id, market, horizon)
+    return jsonify(result), status_code
 
 @investment_bp.route('/transactions', methods=['POST'])
 def create_transaction_route():
@@ -37,11 +47,8 @@ def create_transaction_route():
 def list_transactions_route():
     user_id = request.args.get('userId')
     if not user_id: return jsonify({"success": False, "error": "Missing userId parameter"}), 400
-    
-    # Opsiyonel filtreler
     account_id = request.args.get('accountId')
     asset_symbol = request.args.get('assetSymbol')
-    
     result, status_code = InvestmentService.list_transactions(user_id, account_id, asset_symbol)
     return jsonify(result), status_code
 
@@ -57,22 +64,14 @@ def delete_transaction_route(transaction_id):
     result, status_code = InvestmentService.delete_transaction(transaction_id)
     return jsonify(result), status_code
 
-# --- HOLDING (POZİSYON) ROTALARI ---
 @investment_bp.route('/holdings/<string:holding_id>', methods=['DELETE'])
 def delete_holding_route(holding_id):
-    # Bu, bir pozisyonu tüm geçmişiyle siler
     result, status_code = InvestmentService.delete_holding(holding_id)
     return jsonify(result), status_code
 
 @investment_bp.route('/holdings/<string:holding_id>', methods=['PUT'])
 def override_holding_route(holding_id):
-    """
-    Bir varlığın tüm geçmişini silip, verilen yeni değerlerle
-    tek bir işlem olarak yeniden oluşturur.
-    """
     data = request.get_json()
-    if not data:
-        return jsonify({"success": False, "error": "No data provided"}), 400
-        
+    if not data: return jsonify({"success": False, "error": "No data provided"}), 400
     result, status_code = InvestmentService.override_holding(holding_id, data)
     return jsonify(result), status_code

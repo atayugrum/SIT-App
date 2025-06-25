@@ -24,7 +24,7 @@ Future<void> main() async {
   // Türkçe tarih ve sayı formatlaması için 'intl' paketini başlatıyoruz.
   // Bu satır, İşlem Geçmişi sayfasındaki DateFormat ve NumberFormat hatalarını çözer.
   await initializeDateFormatting('tr_TR', null);
-  
+
   // Riverpod state yönetimi için ProviderScope ile sarmalayarak uygulamayı çalıştırıyoruz.
   runApp(
     const ProviderScope(

@@ -9,23 +9,38 @@ final analyticsServiceProvider = Provider<AnalyticsFlutterService>((ref) {
 });
 
 // Tüm dashboard verisini tek seferde çeken ana FutureProvider
-final dashboardInsightsProvider = FutureProvider.autoDispose<DashboardInsightsModel>((ref) {
+final dashboardInsightsProvider =
+    FutureProvider.autoDispose<DashboardInsightsModel>((ref) {
   return ref.watch(analyticsServiceProvider).getDashboardInsights();
 });
 
 // === Diğer Provider'lar Ana Provider'dan Veri Alır ===
 
 // Gelir/Gider özetini ana veriden seçerek sunar
-final incomeExpenseSummaryProvider = Provider.autoDispose<AsyncValue<IncomeExpenseSummary>>((ref) {
-  return ref.watch(dashboardInsightsProvider).whenData((insights) => insights.incomeExpenseSummary);
+final incomeExpenseSummaryProvider =
+    Provider.autoDispose<AsyncValue<IncomeExpenseSummary>>((ref) {
+  return ref
+      .watch(dashboardInsightsProvider)
+      .whenData((insights) => insights.incomeExpenseSummary);
 });
 
 // İstek/İhtiyaç özetini ana veriden seçerek sunar
-final needsVsWantsProvider = Provider.autoDispose<AsyncValue<NeedsVsWantsModel>>((ref) {
-  return ref.watch(dashboardInsightsProvider).whenData((insights) => insights.needsVsWantsSummary);
+final needsVsWantsProvider =
+    Provider.autoDispose<AsyncValue<NeedsVsWantsModel>>((ref) {
+  return ref
+      .watch(dashboardInsightsProvider)
+      .whenData((insights) => insights.needsVsWantsSummary);
 });
 
 // Duygu özetini ana veriden seçerek sunar
-final emotionSummaryProvider = Provider.autoDispose<AsyncValue<List<EmotionSpendingItem>>>((ref) {
-  return ref.watch(dashboardInsightsProvider).whenData((insights) => insights.emotionSummary);
+final emotionSummaryProvider =
+    Provider.autoDispose<AsyncValue<List<EmotionSpendingItem>>>((ref) {
+  return ref
+      .watch(dashboardInsightsProvider)
+      .whenData((insights) => insights.emotionSummary);
+});
+
+final aiProjectionsProvider =
+    FutureProvider.autoDispose<AIProjectionsModel>((ref) {
+  return ref.watch(analyticsServiceProvider).getAIProjections();
 });

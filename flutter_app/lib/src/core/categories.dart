@@ -1,166 +1,121 @@
 // File: flutter_app/lib/src/core/categories.dart
 import 'package:flutter/material.dart';
 
-/// ─── Income Categories ─────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// HARCAMA KATEGORİLERİ (EXPENSE)
+// -----------------------------------------------------------------------------
 
-/// Top-level income categories with Material icons
-const Map<String, IconData> incomeCategories = {
-  'Maaş': Icons.work_outline, // Using outline icons for consistency
-  'Ek Gelir': Icons.attach_money_outlined,
-  'Yatırım': Icons.trending_up_outlined,
-  'Hediye': Icons.card_giftcard_outlined,
-  'Diğer Gelir': Icons.category_outlined,
-};
-
-/// Subcategories for each income category
-const Map<String, List<String>> incomeSubcategories = {
-  'Maaş': [
-    'Ana Maaş',
-    'Prim',
-    'Bonus',
-    'Fazla Mesai',
-  ],
-  'Ek Gelir': [
-    'Freelance',
-    'Kira Geliri', // Clarified "Kira" for income
-    'Komisyon',
-    'Yan İş',
-  ],
-  'Yatırım': [
-    'Faiz Geliri', // Clarified "Faiz"
-    'Temettü',
-    'Alım-Satım Karı',
-    'Kur Kazancı',
-  ],
-  'Hediye': [
-    'Doğum Günü',
-    'Tatil Hediyesi',
-    'Ödül',
-    'Alınan Bağış', // Clarified "Bağış" for income
-  ],
-  'Diğer Gelir': [
-    'Arızi Gelir',
-    'Diğer',
-  ],
-};
-
-/// ─── Expense Categories ────────────────────────────────────────────────────
-
-/// Top-level expense categories with Material icons
+/// Ana harcama kategorileri ve ikonları
 const Map<String, IconData> expenseCategories = {
-  'Market': Icons.shopping_cart_outlined,
-  'Ulaşım': Icons.directions_car_outlined, // Changed for consistency
-  'Eğlence': Icons.celebration_outlined,
-  'Fatura': Icons.receipt_long_outlined,
-  'Sağlık': Icons.local_hospital_outlined,
-  'Kira Gideri': Icons.house_outlined, // Differentiated from income "Kira"
-  'Eğitim': Icons.school_outlined,
-  'Giyim': Icons.checkroom_outlined,
-  'Seyahat': Icons.flight_takeoff_outlined, // Changed for consistency
-  'Ev Bakım': Icons.build_outlined,
-  'Sigorta': Icons.shield_outlined,
-  'Vergi': Icons.account_balance_outlined,
-  'Yardım/Bağış Gideri': Icons.volunteer_activism_outlined, // Differentiated
-  'Diğer Gider': Icons.category_outlined,
+  'Ev & Faturalar': Icons.home_work_outlined,
+  'Market & Gıda': Icons.shopping_basket_outlined,
+  'Ulaşım': Icons.directions_car_filled_outlined,
+  'Kişisel Bakım': Icons.face_retouching_natural_outlined,
+  'Sağlık & Spor': Icons.health_and_safety_outlined,
+  'Eğlence & Sosyal Yaşam': Icons.celebration_outlined,
+  'Giyim & Aksesuar': Icons.checkroom_outlined,
+  'Finansal Giderler': Icons.account_balance_outlined,
+  'Diğer': Icons.category_outlined,
 };
 
-/// Subcategories for each expense category
+/// Her harcama kategorisi için detaylı alt kategoriler
 const Map<String, List<String>> expenseSubcategories = {
-  'Market': [
-    'Gıda',
-    'Yiyecek & İçecek',
-    'Temizlik Malzemesi', // Clarified
-    'Kişisel Bakım', // Added common one
-    'Kırtasiye',
-    'Şarküteri',
+  'Ev & Faturalar': [
+    'Kira Gideri',
+    'Aidat',
+    'Elektrik Faturası',
+    'Su Faturası',
+    'Doğalgaz & Isınma',
+    'İnternet Faturası',
+    'Cep Telefonu Faturası',
+    'Dijital Abonelikler (Netflix, Spotify vb.)',
+    'Ev Eşyası & Tadilat',
+  ],
+  'Market & Gıda': [
+    'Süpermarket Alışverişi',
+    'Restoran & Kafe',
+    'Kahve Dükkanları',
+    'Dışarıdan Sipariş (Yemeksepeti, Getir vb.)',
+    'Fırın & Pastane',
   ],
   'Ulaşım': [
-    'Yakıt',
-    'Toplu Taşıma', // More general
-    'Taksi', // Simplified
-    'Araç Bakım', // Clarified
-    'Park Ücreti',
-    'Otoyol/Köprü Geçiş', // Added
+    'Toplu Taşıma (Aylık Akbil/Kart)',
+    'Tek Bilet & Dolum',
+    'Taksi',
+    'Yakıt (Benzin/Dizel)',
+    'Araç Bakım & Sigorta',
+    'Park & Otoyol Ücretleri',
   ],
-  'Eğlence': [
-    'Sinema/Tiyatro', // Combined
-    'Restoran/Kafe', // Combined
-    'Konser/Etkinlik', // Combined
-    'Oyun/Hobi', // Combined
-    'Kitap/Dergi', // Added
-    'Dijital Abonelikler (Netflix, Spotify vb.)', // Added
+  'Kişisel Bakım': [
+    'Kozmetik & Cilt Bakımı',
+    'Kuaför & Berber',
+    'Kişisel Hijyen Ürünleri',
   ],
-  'Fatura': [
-    'Elektrik',
-    'Su',
-    'Doğalgaz/Isınma', // Clarified
-    'İnternet',
-    'Telefon (Mobil/Sabit)', // Combined
-    'TV & Dijital Yayın', // Clarified
-    'Aidat', // Added
+  'Sağlık & Spor': [
+    'İlaç & Vitamin',
+    'Doktor & Muayene Ücreti',
+    'Diş Hekimi',
+    'Spor Salonu Üyeliği',
+    'Spor Malzemeleri',
   ],
-  'Sağlık': [
-    'Hastane/Doktor Muayenesi', // Combined
-    'İlaç',
-    'Dişçi',
-    'Gözlük/Lens', // Combined
-    'Terapi/Danışmanlık', // Added
+  'Eğlence & Sosyal Yaşam': [
+    'Sinema, Tiyatro, Konser',
+    'Hobi & Aktiviteler',
+    'Kitap & Dergi',
+    'Tatil & Seyahat',
+    'Barlar & Gece Hayatı',
   ],
-  'Kira Gideri': [ // Matched category name
-    'Konut Kirası',
-    'Oda/Kısmî Kira',
-    'Depozito Ödemesi', // Clarified
-  ],
-  'Eğitim': [
-    'Kurs & Seminer Ücreti', // Clarified
-    'Okul/Üniversite Harcı', // Clarified
-    'Kitap/Eğitim Materyali', // Combined
-  ],
-  'Giyim': [
-    'Günlük Giyim', // More general
-    'İş Kıyafeti', // Added
+  'Giyim & Aksesuar': [
+    'Kıyafet',
     'Ayakkabı',
-    'Aksesuar',
-    'Çocuk Giyim', // Added
+    'Aksesuar & Çanta',
+    'Kuru Temizleme',
   ],
-  'Seyahat': [
-    'Uçak/Tren/Otobüs Bileti', // Combined
-    'Otel/Konaklama', // Clarified
-    'Vize/Pasaport Ücreti', // Clarified
-    'Tur & Gezi Harcaması', // Clarified
-    'Seyahat İçi Harcamalar', // Added
+  'Finansal Giderler': [
+    'Kredi Kartı Borcu Ödemesi',
+    'Kredi Taksiti Ödemesi',
+    'Banka Masrafları (EFT, Havale vb.)',
+    'Vergiler',
   ],
-  'Ev Bakım': [
-    'Tamirat/Tadilat', // Combined
-    'Mobilya/Beyaz Eşya', // Combined
-    'Dekorasyon',
-    'Bahçe/Balkon Bakım', // Combined
-    'Ev Aletleri', // Added
+  'Diğer': [
+    'Evcil Hayvan Masrafları',
+    'Hediye',
+    'Bağış',
+    'Eğitim & Kurslar',
+    'Diğer Harcamalar',
   ],
-  'Sigorta': [
-    'Sağlık Sigortası',
-    'Araç Sigortası (Kasko/Trafik)', // Combined
-    'Konut Sigortası (DASK vb.)', // Combined
-    'Seyahat Sigortası',
-    'Hayat Sigortası', // Added
+};
+
+// -----------------------------------------------------------------------------
+// GELİR KATEGORİLERİ (INCOME)
+// -----------------------------------------------------------------------------
+
+/// Ana gelir kategorileri ve ikonları
+const Map<String, IconData> incomeCategories = {
+  'Maaş & Hak Edişler': Icons.work_history_outlined,
+  'Yatırım Gelirleri': Icons.trending_up_outlined,
+  'Ek Gelirler': Icons.add_card_outlined,
+};
+
+/// Her gelir kategorisi için detaylı alt kategoriler
+const Map<String, List<String>> incomeSubcategories = {
+  'Maaş & Hak Edişler': [
+    'Aylık Maaş',
+    'Prim & Bonus',
+    'Fazla Mesai',
+    'Serbest Meslek (Freelance)',
   ],
-  'Vergi': [
-    'Emlak Vergisi',
-    'Gelir Vergisi Ödemesi', // Clarified
-    'Motorlu Taşıtlar Vergisi (MTV)', // Clarified
-    'Diğer Resmi Ödemeler', // Added
+  'Yatırım Gelirleri': [
+    'Faiz Geliri (Mevduat vb.)',
+    'Temettü (Dividend)',
+    'Hisse Senedi Satış Karı',
+    'Kripto Varlık Satış Karı',
+    'Kira Geliri',
   ],
-  'Yardım/Bağış Gideri': [ // Matched category name
-    'Vakıf Bağışı', // Clarified
-    'Dernek Bağışı', // Clarified
-    'Kişisel Yardımlar', // Added
-    'Sosyal Sorumluluk Projesi Katkısı', // Clarified
-  ],
-  'Diğer Gider': [
-    'Hediye Alımı', // Clarified
-    'Arızi Gider',
-    'Banka Masrafları', // Added
-    'Evcil Hayvan Masrafı', // Added
-    'Diğer Tanımsız Giderler', // Clarified
+  'Ek Gelirler': [
+    'Satılan Eşya (Letgo, Dolap vb.)',
+    'Hediye & Burs',
+    'Vergi İadesi',
+    'Diğer Ek Gelirler',
   ],
 };

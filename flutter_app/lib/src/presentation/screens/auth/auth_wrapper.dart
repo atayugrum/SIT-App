@@ -16,7 +16,7 @@ class AuthWrapper extends ConsumerWidget {
       data: (user) {
         if (user != null) {
           // Kullanıcı giriş yapmışsa, yeni HomeScreen'e git
-          return const HomeScreen(); 
+          return const HomeScreen();
         }
         // Kullanıcı giriş yapmamışsa LoginScreen'e git
         return const LoginScreen();

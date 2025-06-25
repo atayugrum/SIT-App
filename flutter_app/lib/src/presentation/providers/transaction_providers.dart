@@ -1,10 +1,11 @@
 // File: lib/src/presentation/providers/transaction_providers.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-
 import '../../data/models/transaction_model.dart';
 import '../../data/services/transaction_flutter_service.dart';
 import 'auth_providers.dart';
+import 'account_providers.dart';
+import 'analytics_v2_providers.dart';
 
 enum QuickDateRange { thisMonth, lastMonth, last3Months, last6Months, allTime }
 
@@ -16,7 +17,6 @@ class TransactionsState {
   final DateTime endDate;
   final String? filterType;
   final String? filterAccount;
-
   final double totalIncome;
   final double totalExpense;
 
@@ -61,7 +61,7 @@ class TransactionsState {
 
 class TransactionsNotifier extends StateNotifier<TransactionsState> {
   final TransactionFlutterService _service;
-
+  
   TransactionsNotifier(this._service) : super(TransactionsState(
     startDate: DateTime(DateTime.now().year, DateTime.now().month, 1),
     endDate: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 23, 59, 59),
@@ -79,7 +79,6 @@ class TransactionsNotifier extends StateNotifier<TransactionsState> {
         type: state.filterType,
         account: state.filterAccount,
       );
-      
       double income = 0.0;
       double expense = 0.0;
       for (var tx in transactions) {
@@ -89,52 +88,85 @@ class TransactionsNotifier extends StateNotifier<TransactionsState> {
           expense += tx.amount;
         }
       }
-      
-      state = state.copyWith(
-        transactions: transactions, 
-        isLoading: false,
-        totalIncome: income,
-        totalExpense: expense,
-      );
+      state = state.copyWith(transactions: transactions, isLoading: false, totalIncome: income, totalExpense: expense);
     } catch (e) {
       state = state.copyWith(error: e.toString(), isLoading: false);
     }
   }
   
+  // DOLDURULMUŞ FONKSİYON
   void setQuickDateRange(QuickDateRange range) {
     final now = DateTime.now();
-    DateTime newStartDate;
-    DateTime newEndDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    DateTime newStart;
+    DateTime newEnd;
 
     switch (range) {
       case QuickDateRange.thisMonth:
-        newStartDate = DateTime(now.year, now.month, 1);
+        newStart = DateTime(now.year, now.month, 1);
+        newEnd = now;
         break;
       case QuickDateRange.lastMonth:
-        final lastMonthEnd = DateTime(now.year, now.month, 1).subtract(const Duration(days: 1));
-        newStartDate = DateTime(lastMonthEnd.year, lastMonthEnd.month, 1);
-        newEndDate = lastMonthEnd;
+        final firstDayOfThisMonth = DateTime(now.year, now.month, 1);
+        newEnd = firstDayOfThisMonth.subtract(const Duration(days: 1));
+        newStart = DateTime(newEnd.year, newEnd.month, 1);
         break;
       case QuickDateRange.last3Months:
-        newStartDate = DateTime(now.year, now.month - 2, 1);
+        newStart = DateTime(now.year, now.month - 2, 1);
+        newEnd = now;
         break;
       case QuickDateRange.last6Months:
-         newStartDate = DateTime(now.year, now.month - 5, 1);
+        newStart = DateTime(now.year, now.month - 5, 1);
+        newEnd = now;
         break;
       case QuickDateRange.allTime:
-         newStartDate = DateTime(2000);
-         break;
+        newStart = DateTime(2000);
+        newEnd = now;
+        break;
     }
-    state = state.copyWith(startDate: newStartDate, endDate: newEndDate);
+    setDateRange(newStart, newEnd);
+  }
+
+  void setDateRange(DateTime newStart, DateTime newEnd) {
+    state = state.copyWith(startDate: newStart, endDate: newEnd);
     fetchTransactions();
   }
 
-  Future<void> addTransaction(TransactionModel transaction) async { try { await _service.createTransaction(transaction); fetchTransactions(); } catch (e) { rethrow; } }
-  Future<void> updateTransactionInList(String id, TransactionModel transaction) async { try { await _service.updateTransaction(id, transaction); fetchTransactions(); } catch (e) { rethrow; } }
-  Future<void> deleteTransactionFromList(String id) async { try { await _service.deleteTransaction(id); fetchTransactions(); } catch (e) { rethrow; } }
-  void setDateRange(DateTime newStart, DateTime newEnd) { state = state.copyWith(startDate: newStart, endDate: newEnd); fetchTransactions(); }
-  void setFilterType(String? type) { state = state.copyWith(filterType: type); fetchTransactions(); }
-  void setAccountFilter(String? accountName) { state = state.copyWith(filterAccount: accountName, clearAccountFilter: accountName == null); fetchTransactions(); }
+  void setFilterType(String? type) {
+    state = state.copyWith(filterType: type);
+    fetchTransactions();
+  }
+
+  void setAccountFilter(String? accountName) {
+    state = state.copyWith(filterAccount: accountName, clearAccountFilter: accountName == null);
+    fetchTransactions();
+  }
+  
+  Future<void> addTransaction(TransactionModel transaction) async {
+    try {
+      await _service.createTransaction(transaction);
+      fetchTransactions();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> updateTransactionInList(String id, TransactionModel transaction) async {
+    try {
+      await _service.updateTransaction(id, transaction);
+      fetchTransactions();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> deleteTransactionFromList(String id) async {
+    try {
+      await _service.deleteTransaction(id);
+      fetchTransactions();
+    } catch (e) {
+      rethrow;
+    }
+  }
 }
 
 final transactionServiceProvider = Provider<TransactionFlutterService>((ref) {
@@ -150,11 +182,35 @@ final accountTransactionsProvider = FutureProvider.autoDispose.family<List<Trans
   final service = ref.watch(transactionServiceProvider);
   final now = DateTime.now();
   final startDate = DateTime(now.year, now.month - 3, 1);
-  final endDate = now;
-  final DateFormat formatter = DateFormat('yyyy-MM-dd');
-  return await service.listTransactions(
-    startDate: formatter.format(startDate),
-    endDate: formatter.format(endDate),
-    account: accountName,
-  );
+  final formatter = DateFormat('yyyy-MM-dd');
+  return await service.listTransactions(startDate: formatter.format(startDate), endDate: formatter.format(now), account: accountName);
+});
+
+class TransactionActionNotifier extends StateNotifier<AsyncValue<void>> {
+  final Ref _ref;
+  TransactionActionNotifier(this._ref) : super(const AsyncData(null));
+
+  Future<void> _runAction(Future<void> Function() action) async {
+    state = const AsyncLoading();
+    try {
+      await action();
+      state = const AsyncData(null);
+      // İlgili provider'ları geçersiz kılarak yeniden yüklenmelerini sağla
+      _ref.invalidate(transactionsProvider);
+      _ref.invalidate(accountsProvider);
+      _ref.invalidate(analyticsV2Provider); // Analizleri de güncelle
+    } catch (e, s) {
+      state = AsyncError(e, s);
+      rethrow;
+    }
+  }
+
+  Future<void> createTransfer(Map<String, dynamic> transferData) async {
+    final service = _ref.read(transactionServiceProvider);
+    await _runAction(() => service.createTransfer(transferData));
+  }
+}
+
+final transactionActionProvider = StateNotifierProvider.autoDispose<TransactionActionNotifier, AsyncValue<void>>((ref) {
+  return TransactionActionNotifier(ref);
 });

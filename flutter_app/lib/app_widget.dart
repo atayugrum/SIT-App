@@ -1,8 +1,8 @@
 // File: flutter_app/lib/app_widget.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// import 'src/presentation/screens/auth/login_screen.dart'; // No longer directly used here
-import 'src/presentation/screens/auth/auth_wrapper.dart'; // Import AuthWrapper
+import 'package:flutter_localizations/flutter_localizations.dart'; // YENİ IMPORT
+import 'src/presentation/screens/auth/auth_wrapper.dart';
 
 class AppWidget extends StatelessWidget {
   const AppWidget({super.key});
@@ -18,7 +18,22 @@ class AppWidget extends StatelessWidget {
           brightness: Brightness.light,
         ),
         debugShowCheckedModeBanner: false,
-        home: const AuthWrapper(), // Start with AuthWrapper
+
+        // --- BU SATIRLARI EKLEYİN ---
+        locale: const Locale(
+            'tr', 'TR'), // Uygulamanın varsayılan dilini Türkçe yapar
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('tr', 'TR'), // Türkçe desteği
+          Locale('en', 'US'), // İngilizce (opsiyonel ama iyi bir pratiktir)
+        ],
+        // --------------------------
+
+        home: const AuthWrapper(),
       ),
     );
   }

@@ -7,7 +7,6 @@ from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 import uuid
 
-
 class AccountService:
     @staticmethod
     def create_account(data):
@@ -18,7 +17,8 @@ class AccountService:
             required_fields = ['userId', 'accountName', 'accountType', 'currency']
             for field in required_fields:
                 if field not in data or data[field] is None:
-                    return { "success": False, "error": f"Missing required field: {field}" }, 400
+                    return { "success": False, "error": f"Zorunlu alan eksik: {field}" }, 400
+            
 
             initial_balance = float(data.get('initialBalance', 0.0))
 
@@ -34,9 +34,17 @@ class AccountService:
                 'isArchived':    False
             }
             
-            # Yatırım hesapları için kategori ekle
+            # YENİ: Hesap tipine göre özel alanları ekle
             if account_data['accountType'] == 'investment':
                 account_data['category'] = data.get('category', 'Diğer Yatırımlar')
+            elif account_data['accountType'] == 'credit_card':
+                account_data['creditLimit'] = float(data.get('creditLimit', 0.0))
+                account_data['statementDay'] = int(data.get('statementDay', 1))
+                account_data['dueDateDay'] = int(data.get('dueDateDay', 10))
+                # Kredi kartı borcu negatif bakiye olarak başlar
+                account_data['initialBalance'] = -abs(initial_balance)
+                account_data['currentBalance'] = -abs(initial_balance)
+
 
             doc_ref = db.collection('user_accounts').document()
             doc_ref.set(account_data)
@@ -50,27 +58,22 @@ class AccountService:
         except Exception as e:
             print(f"Error creating account: {e}")
             traceback.print_exc()
-            return { "success": False, "error": f"An internal error occurred: {str(e)}" }, 500
+            return { "success": False, "error": f"Bir iç sunucu hatası oluştu: {str(e)}" }, 500
+
 
     @staticmethod
     def list_accounts(user_id):
         try:
-            if db is None:
-                raise Exception("Firestore client (db) is not initialized.")
+            if db is None: raise Exception("Firestore client (db) is not initialized.")
             
             query = (
                 db.collection('user_accounts')
                   .where(filter=FieldFilter('userId', '==', user_id))
                   .where(filter=FieldFilter('isArchived', '==', False))
-                  .order_by('accountName', direction=firestore.Query.ASCENDING)
+                  .order_by('accountType').order_by('accountName')
             )
-
             docs = query.stream()
-            accounts = []
-            for doc in docs:
-                item = doc.to_dict()
-                item['id'] = doc.id
-                accounts.append(item)
+            accounts = [ {'id': doc.id, **doc.to_dict()} for doc in docs ]
 
             print(f"Fetched {len(accounts)} accounts for user {user_id}")
             return { "success": True, "accounts": accounts }, 200
@@ -82,9 +85,6 @@ class AccountService:
 
     @staticmethod
     def update_account(account_id, data):
-        """
-        Mevcut hesabı günceller. Sadece gönderilen alanları değiştirir.
-        """
         try:
             ref = db.collection('user_accounts').document(account_id)
             doc = ref.get()
@@ -92,12 +92,15 @@ class AccountService:
                 return {"success": False, "error": "Account not found"}, 404
 
             update_payload = {}
-            for field in ('accountName', 'accountType', 'currency', 'initialBalance', 'currentBalance'):
+            allowed_fields = ['accountName', 'accountType', 'currency', 'category', 'creditLimit', 'statementDay', 'dueDateDay']
+            for field in allowed_fields:
                 if field in data:
-                    # numeric değerler için dönüştürme
-                    update_payload[field] = float(data[field]) if 'Balance' in field else data[field]
-            update_payload['updatedAt'] = datetime.now(timezone.utc).isoformat()
+                    update_payload[field] = data[field]
+            
+            if not update_payload:
+                 return {"success": False, "error": "No valid fields to update."}, 400
 
+            update_payload['updatedAt'] = datetime.now(timezone.utc).isoformat()
             ref.update(update_payload)
             updated = ref.get().to_dict()
             updated['id'] = account_id
@@ -106,19 +109,18 @@ class AccountService:
         except Exception as e:
             print(f"Error updating account {account_id}: {e}")
             traceback.print_exc()
-            return {"success": False, "error": f"An internal error occurred: {str(e)}"}, 500
+            return {"success": False, "error": f"An internal error occurred: {str(e)}" }, 500
 
     @staticmethod
     def delete_account(account_id):
-        """
-        Soft‐delete: isArchived bayrağını True yapar.
-        """
         try:
             ref = db.collection('user_accounts').document(account_id)
             doc = ref.get()
             if not doc.exists:
                 return {"success": True, "message": "Account already archived."}, 200
-
+            
+            # Burada hesabın bakiyesinin sıfır olup olmadığını kontrol etmek iyi bir pratiktir.
+            # Şimdilik direkt arşivliyoruz.
             ref.update({
                 'isArchived': True,
                 'updatedAt': datetime.now(timezone.utc).isoformat()
@@ -128,4 +130,4 @@ class AccountService:
         except Exception as e:
             print(f"Error archiving account {account_id}: {e}")
             traceback.print_exc()
-            return {"success": False, "error": f"An internal error occurred: {str(e)}"}, 500
+            return {"success": False, "error": f"An internal error occurred: {str(e)}" }, 500

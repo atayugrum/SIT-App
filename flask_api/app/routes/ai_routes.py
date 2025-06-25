@@ -26,3 +26,11 @@ def get_budget_recommendation_route():
         return jsonify(recommendation), 200
     except Exception as e:
         return jsonify({"success": False, "error": f"Bütçe önerisi alınırken bir hata oluştu: {str(e)}"}), 500
+
+@ai_bp.route('/indicator-info/<string:indicator_key>', methods=['GET'])
+def get_indicator_info_route(indicator_key):
+    current_value_str = request.args.get('value')
+    current_value = float(current_value_str) if current_value_str else None
+    
+    explanation = AIService.get_indicator_explanation(indicator_key.upper(), current_value)
+    return jsonify({"success": True, "explanation": explanation}), 200

@@ -1,184 +1,196 @@
 // File: flutter_app/lib/src/data/services/category_flutter_service.dart
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:logger/logger.dart';
 import '../models/user_category_model.dart';
-import '../../presentation/providers/auth_providers.dart'; 
+import '../../presentation/providers/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class CategoryFlutterService {
-  static const String _flaskApiBaseUrl = 'http://10.0.2.2:5000'; 
+  static const String _flaskApiBaseUrl = 'http://10.0.2.2:5000';
   final Ref _ref;
+  final _logger = Logger(printer: PrettyPrinter(methodCount: 1, errorMethodCount: 5));
 
   CategoryFlutterService(this._ref);
 
+  String? get _userId => _ref.read(currentUserProvider)?.uid;
+
   Future<UserCategoryModel> createCategory(UserCategoryModel category) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
+    if (_userId == null) {
+      _logger.w("User not logged in. Cannot create category.");
       throw Exception("User not logged in. Cannot create category.");
     }
 
-    final Map<String, dynamic> categoryDataForApi = category.toMapForApi()
-        ..['userId'] = currentUser.uid;
-
+    final Map<String, dynamic> categoryDataForApi = category.toMapForApi()..['userId'] = _userId;
     final url = Uri.parse('$_flaskApiBaseUrl/api/categories');
-    print("CATEGORY_FLUTTER_SERVICE: Creating category at $url with data: ${jsonEncode(categoryDataForApi)}");
+    _logger.i("Creating category at $url");
+    _logger.d("Category data for API: ${jsonEncode(categoryDataForApi)}");
 
     try {
       final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(categoryDataForApi),
-      ).timeout(const Duration(seconds: 10));
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(categoryDataForApi),
+          ).timeout(const Duration(seconds: 10));
 
-      print("CATEGORY_FLUTTER_SERVICE: Create response status: ${response.statusCode}");
+      _logger.d("Create category response status: ${response.statusCode}");
 
       if (response.statusCode == 201) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true && responseData.containsKey('category')) {
-          print("CATEGORY_FLUTTER_SERVICE: Custom category created: ${responseData['category']}");
+          _logger.i("Custom category created successfully.");
           return UserCategoryModel.fromMap(responseData['category'] as Map<String, dynamic>);
         } else {
+          _logger.e("API success but response format is invalid.", error: response.body);
           throw Exception(responseData['error'] ?? 'Failed to create category: Unexpected API response format.');
         }
       } else {
         final errorData = jsonDecode(response.body);
-        print("CATEGORY_FLUTTER_SERVICE: Error creating category - ${response.statusCode}: ${response.body}");
+        _logger.e("Error creating category - ${response.statusCode}", error: response.body);
         throw Exception('Failed to create category: ${errorData['error'] ?? response.reasonPhrase}');
       }
+    } on SocketException catch (e, s) {
+      _logger.e("Network error during createCategory", error: e, stackTrace: s);
+      throw Exception('Lütfen internet bağlantınızı kontrol edin.');
+    } on TimeoutException catch (e, s) {
+      _logger.e("Timeout during createCategory", error: e, stackTrace: s);
+      throw Exception('Network error: Request timed out.');
     } catch (e, s) {
-      print("CATEGORY_FLUTTER_SERVICE: Exception during createCategory: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is your Flask API server running and accessible?');
-      }
+      _logger.e("Generic exception during createCategory", error: e, stackTrace: s);
       rethrow;
     }
   }
 
   Future<List<UserCategoryModel>> listCategories({String? categoryType}) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
-      print("CATEGORY_FLUTTER_SERVICE: User not logged in. Cannot list categories.");
+    if (_userId == null) {
+      _logger.w("User not logged in. Cannot list categories.");
       return [];
     }
 
-    final Map<String, String> queryParams = {'userId': currentUser.uid};
+    final Map<String, String> queryParams = {'userId': _userId!};
     if (categoryType != null) {
       queryParams['type'] = categoryType;
     }
 
     final url = Uri.parse('$_flaskApiBaseUrl/api/categories').replace(queryParameters: queryParams);
-    print("CATEGORY_FLUTTER_SERVICE: Listing categories from $url");
+    _logger.i("Listing categories from $url");
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
-      print("CATEGORY_FLUTTER_SERVICE: List response status: ${response.statusCode}");
+      _logger.d("List categories response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true && responseData.containsKey('categories')) {
           final List<dynamic> categoriesData = responseData['categories'];
-          final categories = categoriesData
-              .map((data) => UserCategoryModel.fromMap(data as Map<String, dynamic>))
-              .toList();
-          print("CATEGORY_FLUTTER_SERVICE: Fetched ${categories.length} custom categories.");
+          final categories = categoriesData.map((data) => UserCategoryModel.fromMap(data as Map<String, dynamic>)).toList();
+          _logger.i("Fetched ${categories.length} custom categories.");
           return categories;
         } else {
+          _logger.e("API success but response format is invalid.", error: response.body);
           throw Exception(responseData['error'] ?? 'Failed to list categories: Unexpected API response format.');
         }
       } else {
         final errorData = jsonDecode(response.body);
-        print("CATEGORY_FLUTTER_SERVICE: Error listing categories - ${response.statusCode}: ${response.body}");
+        _logger.e("Error listing categories - ${response.statusCode}", error: response.body);
         throw Exception('Failed to list categories: ${errorData['error'] ?? response.reasonPhrase}');
       }
+    } on SocketException catch (e, s) {
+      _logger.e("Network error during listCategories", error: e, stackTrace: s);
+      throw Exception('Lütfen internet bağlantınızı kontrol edin.');
+    } on TimeoutException catch (e, s) {
+      _logger.e("Timeout during listCategories", error: e, stackTrace: s);
+      throw Exception('Network error: Request timed out.');
     } catch (e, s) {
-      print("CATEGORY_FLUTTER_SERVICE: Exception during listCategories: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is your Flask API server running and accessible?');
-      }
+      _logger.e("Generic exception during listCategories", error: e, stackTrace: s);
       rethrow;
     }
   }
 
-  // NEW: Update Category
   Future<UserCategoryModel> updateCategory(String categoryId, UserCategoryModel category) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
+    if (_userId == null) {
+      _logger.w("User not logged in. Cannot update category.");
       throw Exception("User not logged in. Cannot update category.");
     }
-    // Backend expects only fields to update, but also needs userId for auth (handled by backend route if from token)
-    // Our current Flask route for PUT expects userId in payload if not using token auth yet.
-    final Map<String, dynamic> categoryUpdateData = category.toMapForApi()
-        ..['userId'] = currentUser.uid; // Pass userId for backend auth check for now
-                                      // Remove other non-updatable fields if necessary,
-                                      // but Flask service selects allowed fields.
+    
+    final Map<String, dynamic> categoryUpdateData = category.toMapForApi()..['userId'] = _userId;
 
     final url = Uri.parse('$_flaskApiBaseUrl/api/categories/$categoryId');
-    print("CATEGORY_FLUTTER_SERVICE: Updating category $categoryId at $url with data: ${jsonEncode(categoryUpdateData)}");
+    _logger.i("Updating category $categoryId at $url");
+    _logger.d("Update data: ${jsonEncode(categoryUpdateData)}");
 
     try {
       final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(categoryUpdateData),
-      ).timeout(const Duration(seconds: 10));
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(categoryUpdateData),
+          ).timeout(const Duration(seconds: 10));
 
-      print("CATEGORY_FLUTTER_SERVICE: Update response status: ${response.statusCode}");
+      _logger.d("Update category response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true && responseData.containsKey('category')) {
-          print("CATEGORY_FLUTTER_SERVICE: Category updated: ${responseData['category']}");
+          _logger.i("Category $categoryId updated successfully.");
           return UserCategoryModel.fromMap(responseData['category'] as Map<String, dynamic>);
         } else {
+          _logger.e("API success but response format is invalid.", error: response.body);
           throw Exception(responseData['error'] ?? 'Failed to update category: Unexpected API response.');
         }
       } else {
         final errorData = jsonDecode(response.body);
-        print("CATEGORY_FLUTTER_SERVICE: Error updating category - ${response.statusCode}: ${response.body}");
+        _logger.e("Error updating category - ${response.statusCode}", error: response.body);
         throw Exception('Failed to update category: ${errorData['error'] ?? response.reasonPhrase}');
       }
+    } on SocketException catch (e, s) {
+      _logger.e("Network error during updateCategory", error: e, stackTrace: s);
+      throw Exception('Lütfen internet bağlantınızı kontrol edin.');
+    } on TimeoutException catch (e, s) {
+      _logger.e("Timeout during updateCategory", error: e, stackTrace: s);
+      throw Exception('Network error: Request timed out.');
     } catch (e, s) {
-      print("CATEGORY_FLUTTER_SERVICE: Exception during updateCategory: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is API server running?');
-      }
+      _logger.e("Generic exception during updateCategory", error: e, stackTrace: s);
       rethrow;
     }
   }
 
-  // NEW: Delete Category
   Future<void> deleteCategory(String categoryId) async {
-    final currentUser = _ref.read(currentUserProvider);
-    if (currentUser == null) {
+    if (_userId == null) {
+      _logger.w("User not logged in. Cannot delete category.");
       throw Exception("User not logged in. Cannot delete category.");
     }
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/categories/$categoryId').replace(queryParameters: {'userId': currentUser.uid});
-    print("CATEGORY_FLUTTER_SERVICE: Deleting category $categoryId at $url");
+    final url = Uri.parse('$_flaskApiBaseUrl/api/categories/$categoryId').replace(queryParameters: {'userId': _userId});
+    _logger.i("Deleting category $categoryId at $url");
 
     try {
       final response = await http.delete(url).timeout(const Duration(seconds: 10));
-      print("CATEGORY_FLUTTER_SERVICE: Delete response status: ${response.statusCode}");
+      _logger.d("Delete category response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true) {
-          print("CATEGORY_FLUTTER_SERVICE: Category $categoryId deleted successfully.");
+          _logger.i("Category $categoryId deleted successfully.");
           return;
         } else {
+          _logger.e("API success but response format is invalid.", error: response.body);
           throw Exception(responseData['error'] ?? 'Failed to delete category: Unexpected API response.');
         }
       } else {
-         final errorData = jsonDecode(response.body);
-        print("CATEGORY_FLUTTER_SERVICE: Error deleting - ${response.statusCode}: ${response.body}");
+        final errorData = jsonDecode(response.body);
+        _logger.e("Error deleting category - ${response.statusCode}", error: response.body);
         throw Exception('Failed to delete category: ${errorData['error'] ?? response.reasonPhrase}');
       }
+    } on SocketException catch (e, s) {
+      _logger.e("Network error during deleteCategory", error: e, stackTrace: s);
+      throw Exception('Lütfen internet bağlantınızı kontrol edin.');
+    } on TimeoutException catch (e, s) {
+      _logger.e("Timeout during deleteCategory", error: e, stackTrace: s);
+      throw Exception('Network error: Request timed out.');
     } catch (e, s) {
-      print("CATEGORY_FLUTTER_SERVICE: Exception during deleteCategory: $e\n$s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error. Is API server running?');
-      }
+      _logger.e("Generic exception during deleteCategory", error: e, stackTrace: s);
       rethrow;
     }
   }

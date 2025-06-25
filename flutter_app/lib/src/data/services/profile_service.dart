@@ -1,83 +1,163 @@
-// File: flutter_app/lib/src/data/services/profile_service.dart
+// File: lib/src/data/services/profile_service.dart
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:logger/logger.dart';
 import '../models/user_profile_model.dart';
 
 class ProfileService {
   static const String _flaskApiBaseUrl = 'http://10.0.2.2:5000';
+  final _logger = Logger();
 
   Future<UserProfile> getUserProfile(String uid) async {
     if (uid.isEmpty) {
-      print("PROFILE_SERVICE: Error - User ID (uid) cannot be empty.");
-      throw ArgumentError('User ID (uid) cannot be empty.');
+      _logger.w("Attempted to get profile with empty UID.");
+      throw ArgumentError('Kullanıcı ID (uid) boş olamaz.');
     }
-    final url = Uri.parse('$_flaskApiBaseUrl/api/users/$uid/profile');
-    print("PROFILE_SERVICE: Fetching profile from $url");
+
+    final cacheBuster = DateTime.now().millisecondsSinceEpoch;
+    final url =
+        Uri.parse('$_flaskApiBaseUrl/api/users/$uid/profile?_=$cacheBuster');
+
+    _logger.i("Fetching profile from: $url");
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
-      print("PROFILE_SERVICE: Response status: ${response.statusCode}");
+      _logger.d("Response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        print("PROFILE_SERVICE: Profile data received: $data");
+        _logger.i("Profile data fetched successfully for UID $uid.");
+        _logger.d("Profile data: $data");
         return UserProfile.fromMap(data);
       } else if (response.statusCode == 404) {
-        print("PROFILE_SERVICE: Profile not found (404) for UID $uid - ${response.body}");
-        throw Exception('User profile not found.');
+        _logger.w("Profile not found (404) for UID $uid", error: response.body);
+        throw Exception('Kullanıcı profili bulunamadı.');
       } else {
-        print("PROFILE_SERVICE: Error fetching profile - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to load user profile: Status ${response.statusCode} - ${response.reasonPhrase}');
+        _logger.e(
+            "Error fetching profile for UID $uid - ${response.statusCode}",
+            error: response.body);
+        throw Exception(
+            'Kullanıcı profili yüklenemedi: Durum ${response.statusCode}');
       }
+    } on TimeoutException catch (e, s) {
+      _logger.e('Timeout during getUserProfile for UID $uid',
+          error: e, stackTrace: s);
+      throw Exception('Ağ bağlantısı zaman aşımına uğradı.');
+    } on http.ClientException catch (e, s) {
+      _logger.e('ClientException during getUserProfile for UID $uid',
+          error: e, stackTrace: s);
+      throw Exception('Ağ hatası veya API erişilemez durumda.');
     } catch (e, s) {
-      print("PROFILE_SERVICE: Exception during getUserProfile for UID $uid: $e");
-      print("PROFILE_SERVICE: StackTrace: $s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error or API not reachable. Please check your connection and API server.');
-      }
-      throw Exception('Failed to connect or parse profile data: $e');
+      _logger.e('Generic exception during getUserProfile for UID $uid',
+          error: e, stackTrace: s);
+      throw Exception('Beklenmedik bir hata oluştu: $e');
     }
   }
 
-  // NEW METHOD TO UPDATE USER PROFILE
-  Future<UserProfile> updateUserProfile(String uid, Map<String, dynamic> updates) async {
+  Future<UserProfile> updateUserProfile(
+      String uid, Map<String, dynamic> updates) async {
     if (uid.isEmpty) {
-      throw ArgumentError('User ID (uid) cannot be empty.');
+      _logger.w("Attempted to update profile with empty UID.");
+      throw ArgumentError('Kullanıcı ID (uid) boş olamaz.');
     }
     final url = Uri.parse('$_flaskApiBaseUrl/api/users/$uid/profile');
-    print("PROFILE_SERVICE: Updating profile at $url with data: $updates");
+    _logger.i("Updating profile for UID $uid at: $url");
+    _logger.d("Update data: $updates");
 
     try {
-      final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(updates),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .put(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(updates),
+          )
+          .timeout(const Duration(seconds: 10));
 
-      print("PROFILE_SERVICE: Update response status: ${response.statusCode}");
-      // print("PROFILE_SERVICE: Update response body: ${response.body}");
+      _logger.d("Update response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
-        if (responseData['success'] == true && responseData.containsKey('profile')) {
-            print("PROFILE_SERVICE: Profile update successful. Updated data: ${responseData['profile']}");
-            return UserProfile.fromMap(responseData['profile'] as Map<String, dynamic>);
+        if (responseData['success'] == true &&
+            responseData.containsKey('profile')) {
+          _logger.i("Profile updated successfully for UID $uid.");
+          return UserProfile.fromMap(
+              responseData['profile'] as Map<String, dynamic>);
         } else {
-            print("PROFILE_SERVICE: Profile update API call successful but response indicates failure or missing profile: ${response.body}");
-            throw Exception(responseData['error'] ?? 'Failed to update profile, server error.');
+          _logger.e("API success but response format error during update",
+              error: response.body);
+          throw Exception(responseData['error'] ??
+              'Profil güncellenemedi, sunucu yanıtı hatalı.');
         }
       } else {
         final errorData = jsonDecode(response.body);
-        print("PROFILE_SERVICE: Error updating profile - ${response.statusCode}: ${response.body}");
-        throw Exception('Failed to update profile: ${errorData['error'] ?? response.reasonPhrase}');
+        _logger.e(
+            "Error updating profile for UID $uid - ${response.statusCode}",
+            error: response.body);
+        throw Exception(
+            'Profil güncellenemedi: ${errorData['error'] ?? response.reasonPhrase}');
       }
+    } on TimeoutException catch (e, s) {
+      _logger.e('Timeout during updateUserProfile for UID $uid',
+          error: e, stackTrace: s);
+      throw Exception(
+          'Güncelleme sırasında ağ bağlantısı zaman aşımına uğradı.');
+    } on http.ClientException catch (e, s) {
+      _logger.e('ClientException during updateUserProfile for UID $uid',
+          error: e, stackTrace: s);
+      throw Exception(
+          'Güncelleme sırasında ağ hatası veya API erişilemez durumda.');
     } catch (e, s) {
-      print("PROFILE_SERVICE: Exception during updateUserProfile for UID $uid: $e");
-      print("PROFILE_SERVICE: StackTrace: $s");
-      if (e is http.ClientException || e is TimeoutException) {
-        throw Exception('Network error or API not reachable during update. Please check your connection and API server.');
+      _logger.e('Generic exception during updateUserProfile for UID $uid',
+          error: e, stackTrace: s);
+      throw Exception('Beklenmedik bir güncelleme hatası: $e');
+    }
+  }
+  Future<void> deleteUserAccount(String uid) async {
+    if (uid.isEmpty) {
+      _logger.w("Attempted to delete account with empty UID.");
+      throw ArgumentError('Kullanıcı ID (uid) boş olamaz.');
+    }
+    final url = Uri.parse('$_flaskApiBaseUrl/api/users/$uid');
+    _logger.i("Sending DELETE request for user UID $uid to: $url");
+
+    try {
+      final response = await http.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          // NOT: Eğer API'niz token bazlı koruma gerektiriyorsa,
+          // 'Authorization': 'Bearer <token>' header'ını burada eklemelisiniz.
+        },
+      ).timeout(const Duration(seconds: 20));
+
+      _logger.d("Delete response status: ${response.statusCode}");
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        if (responseData['success'] == true) {
+          _logger.i("User account for UID $uid deleted successfully from backend.");
+          return; // Başarılı, geriye bir şey döndürmeye gerek yok.
+        } else {
+          _logger.e("API success=false during account deletion", error: response.body);
+          throw Exception(responseData['error'] ?? 'Hesap silinemedi, sunucu hatası.');
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        _logger.e(
+            "Error deleting account for UID $uid - ${response.statusCode}",
+            error: response.body);
+        throw Exception(
+            'Hesap silinemedi: ${errorData['error'] ?? response.reasonPhrase}');
       }
-      throw Exception('Failed to connect or parse update response: $e');
+    } on TimeoutException catch (e, s) {
+      _logger.e('Timeout during deleteUserAccount for UID $uid', error: e, stackTrace: s);
+      throw Exception('Hesap silinirken ağ bağlantısı zaman aşımına uğradı.');
+    } on http.ClientException catch (e, s) {
+      _logger.e('ClientException during deleteUserAccount for UID $uid', error: e, stackTrace: s);
+      throw Exception('Hesap silinirken ağ hatası veya API erişilemez durumda.');
+    } catch (e, s) {
+      _logger.e('Generic exception during deleteUserAccount for UID $uid', error: e, stackTrace: s);
+      throw Exception('Hesap silinirken beklenmedik bir hata oluştu: $e');
     }
   }
 }

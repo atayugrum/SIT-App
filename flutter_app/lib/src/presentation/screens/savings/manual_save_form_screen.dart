@@ -8,7 +8,8 @@ class ManualSaveFormScreen extends ConsumerStatefulWidget {
   const ManualSaveFormScreen({super.key});
 
   @override
-  ConsumerState<ManualSaveFormScreen> createState() => _ManualSaveFormScreenState();
+  ConsumerState<ManualSaveFormScreen> createState() =>
+      _ManualSaveFormScreenState();
 }
 
 class _ManualSaveFormScreenState extends ConsumerState<ManualSaveFormScreen> {
@@ -16,8 +17,7 @@ class _ManualSaveFormScreenState extends ConsumerState<ManualSaveFormScreen> {
   final _amountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   final _dateController = TextEditingController(
-    text: DateFormat('yyyy-MM-dd').format(DateTime.now())
-  );
+      text: DateFormat('yyyy-MM-dd').format(DateTime.now()));
   bool _isLoading = false;
 
   @override
@@ -50,8 +50,10 @@ class _ManualSaveFormScreenState extends ConsumerState<ManualSaveFormScreen> {
 
     final amount = double.tryParse(_amountController.text.trim());
     if (amount == null || amount <= 0) {
-       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid positive amount.'), backgroundColor: Colors.redAccent),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please enter a valid positive amount.'),
+            backgroundColor: Colors.redAccent),
       );
       setState(() => _isLoading = false);
       return;
@@ -59,19 +61,24 @@ class _ManualSaveFormScreenState extends ConsumerState<ManualSaveFormScreen> {
 
     try {
       await ref.read(savingsAllocationsProvider.notifier).addManualSaving(
-        amount: amount,
-        date: _selectedDate,
-      );
+            amount: amount,
+            date: _selectedDate,
+          );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Manual saving added successfully!'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Manual saving added successfully!'),
+              backgroundColor: Colors.green),
         );
         Navigator.of(context).pop(true); // Indicate success
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add saving: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.redAccent),
+          SnackBar(
+              content: Text(
+                  'Failed to add saving: ${e.toString().replaceFirst("Exception: ", "")}'),
+              backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -83,12 +90,18 @@ class _ManualSaveFormScreenState extends ConsumerState<ManualSaveFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Colors.teal.shade700;
+    final inputDecoration = InputDecoration(
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: primaryColor, width: 2)),
+    );
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Manual Saving'),
-      ),
+      appBar: AppBar(title: const Text('Kumbaraya Manuel Ekle')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
@@ -96,36 +109,38 @@ class _ManualSaveFormScreenState extends ConsumerState<ManualSaveFormScreen> {
             children: [
               TextFormField(
                 controller: _amountController,
-                decoration: const InputDecoration(labelText: 'Amount to Save', border: OutlineInputBorder(), prefixText: '₺ '),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Please enter an amount';
-                  final numValue = double.tryParse(value);
-                  if (numValue == null || numValue <= 0) return 'Amount must be positive';
-                  return null;
-                },
+                decoration: inputDecoration.copyWith(
+                    labelText: 'Kaydedilecek Tutar', prefixText: '₺ '),
+                // ... (diğer özellikler aynı)
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _dateController,
-                decoration: InputDecoration(
-                  labelText: 'Date of Saving',
-                  border: const OutlineInputBorder(),
+                readOnly: true,
+                onTap: () => _selectDate(context),
+                decoration: inputDecoration.copyWith(
+                  labelText: 'Tasarruf Tarihi',
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.calendar_today),
+                    icon: const Icon(Icons.calendar_today_outlined),
                     onPressed: () => _selectDate(context),
                   ),
                 ),
-                readOnly: true,
-                onTap: () => _selectDate(context),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _isLoading ? null : _submitManualSave,
-                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                child: _isLoading 
-                    ? const SizedBox(height:20, width:20, child: CircularProgressIndicator(strokeWidth:2, color: Colors.white)) 
-                    : const Text('Save to Kumbara'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Kumbaraya Kaydet'),
               ),
             ],
           ),

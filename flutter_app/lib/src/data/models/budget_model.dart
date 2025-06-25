@@ -6,6 +6,7 @@ class BudgetModel {
   final String userId;
   final String category;
   final double limitAmount;
+  final double spentAmount; // EKLENDİ
   final String period;
   final int year;
   final int month;
@@ -18,6 +19,7 @@ class BudgetModel {
     required this.userId,
     required this.category,
     required this.limitAmount,
+    this.spentAmount = 0.0, // EKLENDİ
     required this.period,
     required this.year,
     required this.month,
@@ -32,17 +34,23 @@ class BudgetModel {
       userId: map['userId'] as String,
       category: map['category'] as String,
       limitAmount: (map['limitAmount'] as num).toDouble(),
+      spentAmount: (map['spentAmount'] as num?)?.toDouble() ?? 0.0, // EKLENDİ
       period: map['period'] as String? ?? 'monthly',
       year: map['year'] as int,
       month: map['month'] as int,
       isAuto: map['isAuto'] as bool? ?? false,
-      createdAt: map['createdAt'] is Timestamp ? (map['createdAt'] as Timestamp).toDate() : DateTime.parse(map['createdAt'] as String),
-      updatedAt: map['updatedAt'] is Timestamp ? (map['updatedAt'] as Timestamp).toDate() : DateTime.parse(map['updatedAt'] as String),
+      createdAt: map['createdAt'] is Timestamp
+          ? (map['createdAt'] as Timestamp).toDate()
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] is Timestamp
+          ? (map['updatedAt'] as Timestamp).toDate()
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'userId': userId,
       'category': category,
       'limitAmount': limitAmount,

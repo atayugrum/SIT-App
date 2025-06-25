@@ -5,7 +5,6 @@ import '../../data/models/parsed_transaction_model.dart';
 import '../../data/services/ai_flutter_service.dart';
 import '../../presentation/providers/auth_providers.dart';
 import '../../data/models/transaction_model.dart';
-import '../../presentation/providers/account_providers.dart';
 import '../../presentation/providers/transaction_providers.dart';
 import '../../data/models/budget_suggestion_model.dart';
 
@@ -52,7 +51,8 @@ class BatchTransactionNotifier extends StateNotifier<BatchTransactionState> {
   final AIFlutterService _aiService;
   final Ref _ref;
 
-  BatchTransactionNotifier(this._aiService, this._ref) : super(BatchTransactionState());
+  BatchTransactionNotifier(this._aiService, this._ref)
+      : super(BatchTransactionState());
 
   Future<void> parseText(String text) async {
     if (text.trim().isEmpty) return;
@@ -65,15 +65,29 @@ class BatchTransactionNotifier extends StateNotifier<BatchTransactionState> {
     }
   }
 
-  void updateItem(int index, {String? account, bool? isNeed, String? emotion}) {
+  void updateItem(int index,
+      {String? accountId,
+      bool? isNeed,
+      String? emotion,
+      DateTime? date,
+      int? incomeAllocationPct}) {
     if (index < 0 || index >= state.parsedItems.length) return;
-    
+
     final updatedItems = List<ParsedTransactionModel>.from(state.parsedItems);
     updatedItems[index] = updatedItems[index].copyWith(
-      account: account,
+      account: accountId,
       isNeed: isNeed,
       emotion: emotion,
+      date: date,
+      incomeAllocationPct: incomeAllocationPct,
     );
+    state = state.copyWith(parsedItems: updatedItems);
+  }
+
+  void setGlobalAccount(String accountId) {
+    final updatedItems = [
+      for (final item in state.parsedItems) item.copyWith(account: accountId)
+    ];
     state = state.copyWith(parsedItems: updatedItems);
   }
 
@@ -81,40 +95,40 @@ class BatchTransactionNotifier extends StateNotifier<BatchTransactionState> {
     final userId = _ref.read(userIdProvider);
     if (userId == null) throw Exception("Kullanıcı bulunamadı.");
 
-    final transactionService = _ref.read(transactionServiceProvider);
     state = state.copyWith(isLoading: true, clearError: true);
-    
+
     try {
+      final transactionNotifier = _ref.read(transactionsProvider.notifier);
+
       for (final item in state.parsedItems) {
+        if (item.account == null || item.account!.isEmpty) {
+          throw Exception("Bir işlem için hesap seçilmemiş: ${item.description}");
+        }
+
         final transactionToSave = TransactionModel(
           userId: userId,
           type: item.type,
           category: item.category,
-          subCategory: null, // AI şimdilik subcategory tahminlemiyor
+          subCategory: item.subCategory,
           amount: item.amount,
           date: item.date,
-          account: item.account!, // Bu aşamada null olmamalı
+          accountId: item.account!,
           description: item.description,
           isRecurring: false,
           isNeed: item.isNeed,
           emotion: item.emotion,
-          // incomeAllocationPct AI tarafından belirlenmiyor, varsayılan 0
-          incomeAllocationPct: item.type == 'income' ? 0 : null,
+          incomeAllocationPct:
+              item.type == 'income' ? (item.incomeAllocationPct ?? 0) : null,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        await transactionService.createTransaction(transactionToSave);
+        await transactionNotifier.addTransaction(transactionToSave);
       }
-      
-      // Başarıyla kaydedildikten sonra state'i temizle
-      state = state.copyWith(isLoading: false, parsedItems: []);
-      
-      // Ana listeleri yenile
-      _ref.invalidate(transactionsProvider);
-      _ref.invalidate(accountsProvider);
 
+      state = state.copyWith(isLoading: false, parsedItems: []);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: "İşlemler kaydedilemedi: $e");
+      state =
+          state.copyWith(isLoading: false, error: "İşlemler kaydedilemedi: $e");
       rethrow;
     }
   }
@@ -124,8 +138,8 @@ class BatchTransactionNotifier extends StateNotifier<BatchTransactionState> {
   }
 }
 
-
-final batchTransactionProvider = StateNotifierProvider.autoDispose<BatchTransactionNotifier, BatchTransactionState>((ref) {
+final batchTransactionProvider = StateNotifierProvider.autoDispose<
+    BatchTransactionNotifier, BatchTransactionState>((ref) {
   final aiService = ref.watch(aiFlutterServiceProvider);
   return BatchTransactionNotifier(aiService, ref);
 });

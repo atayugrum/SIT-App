@@ -10,27 +10,43 @@ def add_account_route():
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "error": "No data provided"}), 400
-
-    print(f"POST /api/accounts received data: {data}")
     try:
         result, status_code = AccountService.create_account(data)
         return jsonify(result), status_code
     except Exception as e:
-        print(f"Unhandled exception in add_account_route: {e}")
         traceback.print_exc()
-        return jsonify({"success": False, "error": "Internal server error while creating account"}), 500
+        return jsonify({"success": False, "error": "Internal server error"}), 500
 
 @account_bp.route('', methods=['GET'])
 def list_accounts_route():
     user_id = request.args.get('userId')
     if not user_id:
         return jsonify({"success": False, "error": "Missing userId query parameter"}), 400
-
-    print(f"GET /api/accounts for userId: {user_id}")
     try:
         result, status_code = AccountService.list_accounts(user_id)
         return jsonify(result), status_code
     except Exception as e:
-        print(f"Unhandled exception in list_accounts_route: {e}")
         traceback.print_exc()
-        return jsonify({"success": False, "error": "Internal server error while listing accounts"}), 500
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+
+# --- YENİ ROTALAR ---
+@account_bp.route('/<string:account_id>', methods=['PUT'])
+def update_account_route(account_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "No update data provided"}), 400
+    try:
+        result, status_code = AccountService.update_account(account_id, data)
+        return jsonify(result), status_code
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+
+@account_bp.route('/<string:account_id>', methods=['DELETE'])
+def delete_account_route(account_id):
+    try:
+        result, status_code = AccountService.delete_account(account_id)
+        return jsonify(result), status_code
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": "Internal server error"}), 500

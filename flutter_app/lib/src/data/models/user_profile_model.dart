@@ -25,11 +25,13 @@ class UserProfile {
   });
 
   factory UserProfile.fromMap(Map<String, dynamic> map) {
-    // Helper function to parse dates safely from String (ISO 8601) or Timestamp
-    DateTime _parseDate(dynamic dateInput) {
+    // --- DÜZELTME: Fonksiyon ismi standarda uygun hale getirildi ---
+    // Yerel bir yardımcı fonksiyon olduğu için alt çizgi ile başlamamalıdır.
+    DateTime parseDate(dynamic dateInput) {
       if (dateInput == null) return DateTime.now(); // Fallback for safety
       if (dateInput is Timestamp) return dateInput.toDate();
-      if (dateInput is String) return DateTime.tryParse(dateInput) ?? DateTime.now();
+      if (dateInput is String)
+        return DateTime.tryParse(dateInput) ?? DateTime.now();
       return DateTime.now(); // Default fallback
     }
 
@@ -41,12 +43,13 @@ class UserProfile {
       birthDate: map['birthDate'] as String? ?? 'N/A',
       profileIconId: map['profileIconId'] as String?,
       riskProfile: map['riskProfile'] as String?,
-      createdAt: _parseDate(map['createdAt']),
-      updatedAt: _parseDate(map['updatedAt']),
+      createdAt: parseDate(map['createdAt']),
+      updatedAt: parseDate(map['updatedAt']),
     );
   }
-  
-  Map<String, dynamic> toMap() { // For updates later
+
+  Map<String, dynamic> toMap() {
+    // For updates later
     return {
       'uid': uid,
       'fullName': fullName,

@@ -1,6 +1,8 @@
 // File: flutter_app/lib/src/data/models/savings_allocation_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // For parsing date string
+import 'package:intl/intl.dart';
+// --- YENİ EKLENEN IMPORT ---
+import 'package:logger/logger.dart';
 
 class SavingsAllocationModel {
   final String? id;
@@ -21,16 +23,22 @@ class SavingsAllocationModel {
     required this.createdAt,
   });
 
-  static DateTime _parseDate(dynamic dateInput, {bool isDateOnlyString = false}) {
+  // Bu fonksiyon static olduğu için kendi logger'ını oluşturması daha temiz bir çözüm.
+  static DateTime _parseDate(dynamic dateInput,
+      {bool isDateOnlyString = false}) {
     if (dateInput == null) return DateTime.now();
     if (dateInput is Timestamp) return dateInput.toDate();
     if (dateInput is String) {
-      if (isDateOnlyString) { // For "YYYY-MM-DD" strings
+      if (isDateOnlyString) {
+        // For "YYYY-MM-DD" strings
         try {
           return DateFormat('yyyy-MM-dd').parseStrict(dateInput);
         } catch (e) {
-          print("Error parsing date-only string '$dateInput': $e");
-          return DateTime.tryParse(dateInput) ?? DateTime.now(); // Fallback to general parse
+          // --- DÜZELTME: 'print' yerine 'logger.e' kullanıldı ---
+          final logger = Logger();
+          logger.e("Error parsing date-only string '$dateInput'", error: e);
+          return DateTime.tryParse(dateInput) ??
+              DateTime.now(); // Fallback to general parse
         }
       }
       return DateTime.tryParse(dateInput) ?? DateTime.now();
@@ -44,7 +52,7 @@ class SavingsAllocationModel {
       userId: map['userId'] as String? ?? '',
       transactionId: map['transactionId'] as String?,
       amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-      date: _parseDate(map['date'], isDateOnlyString: true), // 'date' is YYYY-MM-DD
+      date: _parseDate(map['date'], isDateOnlyString: true),
       source: map['source'] as String? ?? 'unknown',
       createdAt: _parseDate(map['createdAt']),
     );

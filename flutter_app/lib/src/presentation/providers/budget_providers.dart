@@ -13,14 +13,17 @@ final budgetPeriodProvider = StateProvider<DateTime>((ref) {
   return DateTime(now.year, now.month, 1);
 });
 
-final budgetsProvider = FutureProvider.autoDispose<List<BudgetModel>>((ref) async {
+final budgetsProvider =
+    FutureProvider.autoDispose<List<BudgetModel>>((ref) async {
   final budgetService = ref.watch(budgetServiceProvider);
   final period = ref.watch(budgetPeriodProvider);
   return budgetService.listBudgets(period.year, period.month);
 });
 
 // DÜZELTME: Notifier'ın adı standart hale getirildi.
-final budgetActionNotifierProvider = StateNotifierProvider.autoDispose<BudgetActionNotifier, AsyncValue<void>>((ref) {
+final budgetActionNotifierProvider =
+    StateNotifierProvider.autoDispose<BudgetActionNotifier, AsyncValue<void>>(
+        (ref) {
   return BudgetActionNotifier(ref);
 });
 
@@ -39,7 +42,7 @@ class BudgetActionNotifier extends StateNotifier<AsyncValue<void>> {
       if (userId == null) throw Exception("User not logged in.");
 
       await budgetService.createOrUpdateBudget(budget);
-      
+
       _ref.invalidate(budgetsProvider);
       state = const AsyncData(null);
     } catch (e, stack) {

@@ -1,19 +1,23 @@
 # File: flask_api/app/services/technical_analysis_service.py
 import pandas as pd
 import numpy as np
+from .ai_service import AIService 
 
 class TechnicalAnalysisService:
-    """
-    Finansal veriler üzerinde teknik analiz hesaplamaları yapan
-    yardımcı fonksiyonları içerir.
-    """
+    HORIZONS = {
+        "shortTerm": {"name": "Kısa Vade"},
+        "midTerm": {"name": "Orta Vade"},
+        "longTerm": {"name": "Uzun Vade"},
+    }
+    
+    # --- GÖSTERGE HESAPLAMA FONKSİYONLARI (DEĞİŞİKLİK YOK) ---
+    
     @staticmethod
     def calculate_rsi(price_series: pd.Series, period: int = 14) -> float | None:
         if price_series.empty or len(price_series) < period: return None
         delta = price_series.diff()
         gain = delta.where(delta > 0, 0).ewm(alpha=1/period, adjust=False).mean()
         loss = -delta.where(delta < 0, 0).ewm(alpha=1/period, adjust=False).mean()
-        
         rs = gain / loss.replace(0, 1e-9)
         rsi = 100 - (100 / (1 + rs))
         return rsi.iloc[-1] if not rsi.empty else None
@@ -25,83 +29,90 @@ class TechnicalAnalysisService:
         ema26 = price_series.ewm(span=26, adjust=False).mean()
         macd_line = ema12 - ema26
         signal_line = macd_line.ewm(span=9, adjust=False).mean()
-        
-        # Son değerlerin None olup olmadığını kontrol et
         last_macd = macd_line.iloc[-1] if not macd_line.empty else None
         last_signal = signal_line.iloc[-1] if not signal_line.empty else None
-        
         return last_macd, last_signal
 
     @staticmethod
     def calculate_ema(price_series: pd.Series, span: int) -> float | None:
-        """Belirtilen periyot için Üstel Hareketli Ortalama (EMA) hesaplar."""
         if price_series.empty or len(price_series) < span: return None
         ema = price_series.ewm(span=span, adjust=False).mean()
         return ema.iloc[-1] if not ema.empty else None
 
     @staticmethod
-    def calculate_sl_tp(price_series: pd.Series):
-        """Volatiliteye dayalı Stop-Loss ve Take-Profit seviyeleri hesaplar."""
-        if len(price_series) < 20: return None, None # Yeterli veri yoksa hesaplama
-        last_price = price_series.iloc[-1]
-        
-        # ATR (Average True Range) kullanarak volatilite hesapla
-        high_low = price_series.rolling(14).max() - price_series.rolling(14).min()
-        high_close = np.abs(price_series.rolling(14).max() - price_series.shift().rolling(14).mean())
-        low_close = np.abs(price_series.rolling(14).min() - price_series.shift().rolling(14).mean())
-        
-        tr = pd.DataFrame({'hl': high_low, 'hc': high_close, 'lc': low_close}).max(axis=1)
-        atr = tr.ewm(alpha=1/14, adjust=False).mean().iloc[-1]
-        
-        if pd.isna(atr) or pd.isna(last_price):
-             return None, None
+    def calculate_stochastic(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14):
+        if len(close) < period: return None
+        l14 = low.rolling(window=period).min()
+        h14 = high.rolling(window=period).max()
+        k_percent = 100 * ((close - l14) / (h14 - l14).replace(0, 1e-9))
+        return k_percent.iloc[-1] if not k_percent.empty else None
 
-        stop_loss = last_price - (atr * 1.5)
-        take_profit = last_price + (atr * 2.0)
-        return stop_loss, take_profit
-
+    # --- ANA ANALİZ FONKSİYONU (GÜNCELLENMİŞ HALİ) ---
+        
     @staticmethod
-    def get_analysis_verdict(price: float, ema50: float, rsi: float, macd_line: float, signal_line: float):
-        """Teknik göstergelere göre bir skor ve yorum oluşturur."""
-        score = 0
-        reasons = []
-
-        # Kontroller: Göstergeler None ise analize dahil etme
-        if rsi is not None:
-            if rsi < 30: score += 2; reasons.append(f"RSI ({rsi:.1f}) aşırı satım bölgesinde.")
-            elif rsi > 70: score -= 2; reasons.append(f"RSI ({rsi:.1f}) aşırı alım bölgesinde.")
+    def get_full_analysis(df: pd.DataFrame, symbol: str, risk_profile: str):
+        if df.empty: return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        df = df.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
         
-        if price is not None and ema50 is not None:
-            if price > ema50: score += 1; reasons.append(f"Fiyat ({price:.2f}), 50 periyotluk EMA'nın ({ema50:.2f}) üzerinde (Yükseliş Trendi).")
-            else: score -= 1; reasons.append(f"Fiyat ({price:.2f}), 50 periyotluk EMA'nın ({ema50:.2f}) altında (Düşüş Trendi).")
-
-        if macd_line is not None and signal_line is not None:
-            if macd_line > signal_line: score += 2; reasons.append("MACD çizgisi, sinyal çizgisini yukarı kesmiş (Al Sinyali).")
-            else: score -= 2; reasons.append("MACD çizgisi, sinyal çizgisini aşağı kesmiş (Sat Sinyali).")
+        closes = df["Close"]
+        last_price = closes.iloc[-1]
         
-        if not reasons:
-             return {
-                "score": 0, "verdict": "Yetersiz Veri",
-                "recommendation": "Teknik analiz için yeterli geçmiş veri bulunamadı.",
-                "reasons": []
+        analysis_data = {
+            "symbol": symbol,
+            "lastPrice": round(last_price, 4),
+            "analysis": {}
+        }
+        
+        # Tüm göstergeleri bir kez hesapla
+        macd_line, signal_line = TechnicalAnalysisService.calculate_macd(closes)
+        rsi = TechnicalAnalysisService.calculate_rsi(closes)
+        stochastic = TechnicalAnalysisService.calculate_stochastic(df['High'], df['Low'], df['Close'])
+        ema20 = TechnicalAnalysisService.calculate_ema(closes, 20)
+        ema50 = TechnicalAnalysisService.calculate_ema(closes, 50)
+        ema200 = TechnicalAnalysisService.calculate_ema(closes, 200)
+
+        for horizon_key, params in TechnicalAnalysisService.HORIZONS.items():
+            
+            # --- YENİ: Her vade için SABİT 4 anahtar ama DEĞİŞKEN değerler ---
+            current_indicators = {}
+            if horizon_key == 'shortTerm':
+                current_indicators = {
+                    "rsi": round(rsi, 2) if rsi else None,
+                    "stochastic": round(stochastic, 2) if stochastic else None,
+                    "macd_status": "Pozitif" if macd_line and signal_line and macd_line > signal_line else "Negatif",
+                    "ema_status": "Fiyat EMA20 Üstünde" if ema20 and last_price > ema20 else "Fiyat EMA20 Altında"
+                }
+            elif horizon_key == 'midTerm':
+                current_indicators = {
+                    "rsi": round(rsi, 2) if rsi else None,
+                    "stochastic": round(stochastic, 2) if stochastic else None,
+                    "macd_status": "Pozitif" if macd_line and signal_line and macd_line > signal_line else "Negatif",
+                    "ema_status": "Fiyat EMA50 Üstünde" if ema50 and last_price > ema50 else "Fiyat EMA50 Altında"
+                }
+            elif horizon_key == 'longTerm':
+                 current_indicators = {
+                    "rsi": round(rsi, 2) if rsi else None,
+                    "stochastic": round(stochastic, 2) if stochastic else None,
+                    "macd_status": "Pozitif" if macd_line and signal_line and macd_line > signal_line else "Negatif",
+                    "ema_status": "Fiyat EMA200 Üstünde" if ema200 and last_price > ema200 else "Fiyat EMA200 Altında"
+                }
+            
+            # Yorumu Gemini'den alırken kullanılacak daha açıklayıcı veri
+            indicators_for_ai = {k: v for k, v in current_indicators.items() if v is not None}
+
+            rationale = AIService.generate_dynamic_analysis_comment(
+                indicators=indicators_for_ai, 
+                horizon=params["name"], 
+                symbol=symbol, 
+                risk_profile=risk_profile
+            )
+
+            analysis_data["analysis"][horizon_key] = {
+                "verdict": "POZİTİF" if (current_indicators.get("ema_status", "").endswith("Üstünde") and current_indicators.get("macd_status") == "Pozitif") else "NEGATİF",
+                "rationale": rationale,
+                "indicators": current_indicators # UI için sabit anahtarlı veriyi gönder
             }
 
-        if score >= 3:
-            verdict = "Güçlü Pozitif"
-            recommendation = "Teknik göstergeler kısa vadede güçlü bir yükseliş potansiyeline işaret ediyor."
-        elif score >= 1:
-            verdict = "Nötr-Pozitif"
-            recommendation = "Teknik görünüm pozitif ancak teyit için daha fazla sinyal beklenebilir."
-        elif score <= -3:
-            verdict = "Güçlü Negatif"
-            recommendation = "Teknik görünüm zayıf. Düşüş baskısının devam etme olasılığı mevcut."
-        else:
-            verdict = "Nötr"
-            recommendation = "Piyasa yatay bir seyir izliyor ve net bir yön sinyali bulunmuyor."
-        
-        return {
-            "score": score,
-            "verdict": verdict,
-            "recommendation": recommendation,
-            "reasons": reasons
-        }
+        return analysis_data

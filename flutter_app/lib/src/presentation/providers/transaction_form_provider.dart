@@ -19,10 +19,11 @@ class TransactionFormData {
   final String? recurrenceRule;
   final bool? isNeed;
   final String? emotion;
+  final DateTime? originalCreatedAt;
 
   TransactionFormData({
     this.id,
-    this.type = 'expense', // Varsayılan: expense
+    this.type = 'expense',
     this.category,
     this.subCategory,
     this.amount,
@@ -34,9 +35,9 @@ class TransactionFormData {
     this.recurrenceRule,
     this.isNeed,
     this.emotion,
+    this.originalCreatedAt,
   });
 
-  /// copyWith sayesinde belirli alanları güncelleyip yeni bir state oluşturabiliyoruz.
   TransactionFormData copyWith({
     String? id,
     String? type,
@@ -51,79 +52,54 @@ class TransactionFormData {
     String? recurrenceRule,
     bool? isNeed,
     String? emotion,
-    // Aşağıdakiler true ise ilgili alan null'a çekilecek:
+    DateTime? originalCreatedAt,
     bool clearSubCategory = false,
     bool clearIncomeAllocationPct = false,
     bool clearNeed = false,
     bool clearEmotion = false,
   }) {
-    // Eğer yeni bir type gelmişse, önceki type'a bağlı olarak bazı alanları temizlemek gerekebilir.
     final String effectiveType = type ?? this.type;
 
     return TransactionFormData(
-      id: id, // id'yi null yapmak için ?? this.id kullanmıyoruz
+      id: id ?? this.id, // DÜZELTME: id'nin null olmaması için
       type: effectiveType,
       category: category ?? this.category,
-      subCategory: clearSubCategory
-          ? null
-          : subCategory ?? this.subCategory,
-      amount: amount ?? this.amount, // amount'u null yapmak için ?? this.amount kullanmıyoruz
+      subCategory: clearSubCategory ? null : subCategory ?? this.subCategory,
+      amount: amount ?? this.amount,
       date: date ?? this.date,
       account: account ?? this.account,
-      description: description,
-      incomeAllocationPct: clearIncomeAllocationPct
-          ? null
-          : (effectiveType == 'income'
-              ? (incomeAllocationPct ?? this.incomeAllocationPct)
-              : null),
+      description: description ?? this.description,
+      incomeAllocationPct: clearIncomeAllocationPct ? null : (effectiveType == 'income' ? (incomeAllocationPct ?? this.incomeAllocationPct) : null),
       isRecurring: isRecurring ?? this.isRecurring,
-      recurrenceRule: recurrenceRule,
-      isNeed: clearNeed
-          ? null
-          : (effectiveType == 'expense'
-              ? (isNeed ?? this.isNeed)
-              : null),
-      emotion: clearEmotion
-          ? null
-          : (effectiveType == 'expense'
-              ? (emotion ?? this.emotion)
-              : null),
+      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
+      isNeed: clearNeed ? null : (effectiveType == 'expense' ? (isNeed ?? this.isNeed) : null),
+      emotion: clearEmotion ? null : (effectiveType == 'expense' ? (emotion ?? this.emotion) : null),
+      originalCreatedAt: originalCreatedAt ?? this.originalCreatedAt,
     );
   }
 }
 
 /// Form verisini tutan ve işleyen StateNotifier.
 class TransactionFormNotifier extends StateNotifier<TransactionFormData> {
-  final String? _userId;
+  // DÜZELTME: _userId saklamak yerine Ref objesini saklıyoruz.
+  final Ref _ref;
 
-  TransactionFormNotifier(this._userId)
-      : super(TransactionFormData(
-          date: DateTime.now(),
-          incomeAllocationPct: 0,
-        ));
+  TransactionFormNotifier(this._ref) : super(TransactionFormData(date: DateTime.now(), incomeAllocationPct: 0));
 
-  /// Tür değiştiğinde (income/expense), ilgili alanları resetliyoruz.
   void updateType(String type) {
-    print("FORM_NOTIFIER: Updating type to $type");
     state = state.copyWith(
       type: type,
       category: null,
       subCategory: null,
       clearSubCategory: true,
-      incomeAllocationPct: type == 'income'
-          ? (state.incomeAllocationPct ?? 0)
-          : null,
+      incomeAllocationPct: type == 'income' ? (state.incomeAllocationPct ?? 0) : null,
       clearNeed: type != 'expense',
       clearEmotion: type != 'expense',
     );
   }
 
   void updateCategory(String? category) {
-    state = state.copyWith(
-      category: category,
-      subCategory: null,
-      clearSubCategory: true,
-    );
+    state = state.copyWith(category: category, subCategory: null, clearSubCategory: true);
   }
 
   void updateSubCategory(String? subCategory) {
@@ -143,10 +119,7 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormData> {
   }
 
   void updateIsRecurring(bool isRecurring) {
-    state = state.copyWith(
-      isRecurring: isRecurring,
-      recurrenceRule: isRecurring ? state.recurrenceRule : null,
-    );
+    state = state.copyWith(isRecurring: isRecurring, recurrenceRule: isRecurring ? state.recurrenceRule : null);
   }
 
   void updateRecurrenceRule(String? rule) {
@@ -175,10 +148,7 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormData> {
     }
   }
 
-  /// Var olan bir transaction'ı düzenlemek için, notifier'a veri yüklüyoruz.
   void loadTransactionForEdit(TransactionModel transaction) {
-    print(
-        "FORM_NOTIFIER: Loading transaction for edit. ID: ${transaction.id}, AllocPct: ${transaction.incomeAllocationPct}");
     state = TransactionFormData(
       id: transaction.id,
       type: transaction.type,
@@ -186,59 +156,50 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormData> {
       subCategory: transaction.subCategory,
       amount: transaction.amount,
       date: transaction.date,
-      account: transaction.account,
+      account: transaction.accountId,
       description: transaction.description,
       isRecurring: transaction.isRecurring,
       recurrenceRule: transaction.recurrenceRule,
-      incomeAllocationPct:
-          transaction.type == 'income' ? (transaction.incomeAllocationPct ?? 0) : null,
+      incomeAllocationPct: transaction.type == 'income' ? (transaction.incomeAllocationPct ?? 0) : null,
       isNeed: transaction.type == 'expense' ? transaction.isNeed : null,
       emotion: transaction.type == 'expense' ? transaction.emotion : null,
+      originalCreatedAt: transaction.createdAt,
     );
   }
 
   /// Kaydetme aşamasında formdaki alanları kontrol edip TransactionModel üretiyoruz.
   TransactionModel? toTransactionModel() {
-    if (_userId == null ||
-        state.category == null ||
-        state.amount == null ||
-        state.account == null) {
-          print("FORM_NOTIFIER: Missing required fields. UserId: $_userId, Category: ${state.category}, Amount: ${state.amount}, Account: ${state.account}");
-          
-      print("FORM_NOTIFIER: Validation failed for toTransactionModel.");
+    // DÜZELTME: userId'yi ihtiyaç anında ref'ten oku
+    final userId = _ref.read(userIdProvider);
+
+    if (userId == null || state.category == null || state.amount == null || state.account == null) {
       return null;
     }
 
-    print(
-        "FORM_NOTIFIER: Creating TransactionModel. incomeAllocationPct: ${state.incomeAllocationPct}");
     return TransactionModel(
       id: state.id,
-      userId: _userId,
+      userId: userId, // Artık '!' operatörüne gerek yok ve her zaman dolu
       type: state.type,
       category: state.category!,
       subCategory: state.subCategory,
       amount: state.amount!,
       date: state.date,
-      account: state.account!,
+      accountId: state.account!,
       description: state.description,
       isRecurring: state.isRecurring,
       recurrenceRule: state.recurrenceRule,
-      incomeAllocationPct:
-          state.type == 'income' ? (state.incomeAllocationPct ?? 0) : null,
+      incomeAllocationPct: state.type == 'income' ? (state.incomeAllocationPct ?? 0) : null,
       isNeed: state.type == 'expense' ? state.isNeed : null,
       emotion: state.type == 'expense' ? state.emotion : null,
-      createdAt: DateTime.now(),
+      createdAt: state.id != null ? (state.originalCreatedAt ?? DateTime.now()) : DateTime.now(), 
       updatedAt: DateTime.now(),
     );
   }
 
-  /// Formu tamamen varsayılan save etmek istiyorsak reset ediyoruz.
   void reset() {
-    print("TRANSACTION_FORM_NOTIFIER: Resetting form.");
     state = TransactionFormData(date: DateTime.now(), incomeAllocationPct: 0);
   }
 
-  /// "Save & Add Another" işlemi sonrası, bazı alanları koruyup geri kalanları sıfırlıyoruz.
   void partialResetForNewEntry({
     required String originalType,
     DateTime? originalDate,
@@ -246,8 +207,6 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormData> {
     String? originalCategory,
     String? originalSubCategory,
   }) {
-    print(
-        "TRANSACTION_FORM_NOTIFIER: Partial reset. Keeping Type: $originalType, Account: $originalAccount, Category: $originalCategory, SubCategory: $originalSubCategory");
     state = TransactionFormData(
       type: originalType,
       date: originalDate ?? DateTime.now(),
@@ -266,9 +225,7 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormData> {
   }
 }
 
-/// Provider'ımız
-final transactionFormNotifierProvider =
-    StateNotifierProvider<TransactionFormNotifier, TransactionFormData>((ref) {
-  final userId = ref.watch(currentUserProvider)?.uid;
-  return TransactionFormNotifier(userId);
+final transactionFormNotifierProvider = StateNotifierProvider.autoDispose<TransactionFormNotifier, TransactionFormData>((ref) {
+  // DÜZELTME: Notifier'a artık userId yerine doğrudan 'ref'i veriyoruz.
+  return TransactionFormNotifier(ref);
 });

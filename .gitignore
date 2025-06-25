@@ -1,9 +1,10 @@
 # Firebase service account
 /flask_api/app/utils/serviceAccountKey.json
+/flask_api/.env
 # Eğer Flutter tarafında da environment dosyası varsa
 /lib/src/utils/.env
 /lib/src/config.dart
-C:\Users\atayu\SIT_App_Project\flask_api\.env
+
 
 # Genel şifre/anahtar dosyaları
 *.key
@@ -261,3 +262,35 @@ lib/generated_plugin_registrant.dart
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 
 # End of https://www.toptal.com/developers/gitignore/api/flutter
+
+
+# Flutter ve Dart'a özel dosyalar (genellikle varsayılan olarak gelir)
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+
+# IDE ve Sistem Dosyaları
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# Hassas Android Dosyaları
+/flutter_app/android/key.properties
+/flutter_app/android/app/upload-keystore.jks
+
+# Hassas Backend Dosyaları
+/flask_api/__pycache__/
+/flask_api/*.pyc
+/flask_api/.env  # <-- Çok Önemli! Ortam değişkenlerini tuttuğunuz .env dosyası
+/flask_api/firebase-key.json # <-- Firebase anahtar dosyanız (adı farklıysa onu yazın)
+
+# Geçici Dosyalar
+*.zip
+*.log

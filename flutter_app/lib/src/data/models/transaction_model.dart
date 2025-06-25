@@ -10,16 +10,16 @@ class TransactionModel {
   final String? subCategory;
   final double amount;
   final DateTime date;
-  final String account;
+  // DÜZELTME: Alan adı 'account' yerine 'accountId' olarak değiştirildi.
+  final String accountId; 
   final String? description;
   final bool isRecurring;
   final String? recurrenceRule;
+  final int? incomeAllocationPct;
   final bool? isNeed;
   final String? emotion;
-  final int? incomeAllocationPct;
-  final bool isDeleted;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   TransactionModel({
     this.id,
@@ -29,22 +29,52 @@ class TransactionModel {
     this.subCategory,
     required this.amount,
     required this.date,
-    required this.account,
+    required this.accountId, // DÜZELTME
     this.description,
     this.isRecurring = false,
     this.recurrenceRule,
+    this.incomeAllocationPct,
     this.isNeed,
     this.emotion,
-    this.incomeAllocationPct,
-    this.isDeleted = false,
-    required this.createdAt,
-    required this.updatedAt,
+    this.createdAt,
+    this.updatedAt,
   });
 
-  static DateTime _parseDate(dynamic dateInput) {
-    if (dateInput is Timestamp) return dateInput.toDate();
-    if (dateInput is String) return DateTime.tryParse(dateInput) ?? DateTime.now();
-    return DateTime.now();
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'userId': userId,
+      'type': type,
+      'category': category,
+      'subCategory': subCategory,
+      'amount': amount,
+      'date': DateFormat('yyyy-MM-dd').format(date),
+      // DÜZELTME: Backend'e 'account' yerine 'accountId' anahtarını gönder.
+      'accountId': accountId, 
+      'description': description,
+      'isRecurring': isRecurring,
+      'recurrenceRule': recurrenceRule,
+      'incomeAllocationPct': incomeAllocationPct,
+      'isNeed': isNeed,
+      'emotion': emotion,
+    };
+  }
+
+  Map<String, dynamic> toMapForUpdate() {
+     return {
+      'type': type,
+      'category': category,
+      'subCategory': subCategory,
+      'amount': amount,
+      'date': DateFormat('yyyy-MM-dd').format(date),
+      'accountId': accountId, // DÜZELTME
+      'description': description,
+      'isRecurring': isRecurring,
+      'recurrenceRule': recurrenceRule,
+      'incomeAllocationPct': incomeAllocationPct,
+      'isNeed': isNeed,
+      'emotion': emotion,
+    };
   }
 
   factory TransactionModel.fromMap(Map<String, dynamic> map) {
@@ -52,101 +82,26 @@ class TransactionModel {
       id: map['id'] as String?,
       userId: map['userId'] as String? ?? '',
       type: map['type'] as String? ?? 'expense',
-      category: map['category'] as String? ?? 'Uncategorized',
+      category: map['category'] as String? ?? 'Diğer',
       subCategory: map['subCategory'] as String?,
       amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-      date: _parseDate(map['date']),
-      account: map['account'] as String? ?? '',
+      date: map['date'] is Timestamp 
+          ? (map['date'] as Timestamp).toDate() 
+          : DateTime.tryParse(map['date'] as String? ?? '') ?? DateTime.now(),
+      // DÜZELTME: API'den gelen 'accountId' veya eski 'account' alanını oku.
+      accountId: map['accountId'] as String? ?? map['account'] as String? ?? '', 
       description: map['description'] as String?,
       isRecurring: map['isRecurring'] as bool? ?? false,
       recurrenceRule: map['recurrenceRule'] as String?,
+      incomeAllocationPct: map['incomeAllocationPct'] as int?,
       isNeed: map['isNeed'] as bool?,
       emotion: map['emotion'] as String?,
-      incomeAllocationPct: map['incomeAllocationPct'] as int?,
-      isDeleted: map['isDeleted'] as bool? ?? false,
-      createdAt: _parseDate(map['createdAt']),
-      updatedAt: _parseDate(map['updatedAt']),
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    final map = <String, dynamic>{
-      'userId': userId,
-      'type': type,
-      'category': category,
-      'amount': amount,
-      'date': DateFormat('yyyy-MM-dd').format(date),
-      'account': account,
-      'isRecurring': isRecurring,
-      // Null olmayan alanları ekle
-      if (id != null) 'id': id,
-      if (subCategory != null) 'subCategory': subCategory,
-      if (description != null) 'description': description,
-      if (recurrenceRule != null) 'recurrenceRule': recurrenceRule,
-      if (isNeed != null) 'isNeed': isNeed,
-      if (emotion != null) 'emotion': emotion,
-      if (type == 'income' && incomeAllocationPct != null)
-        'incomeAllocationPct': incomeAllocationPct,
-    };
-    return map;
-  }
-  
-  // YENİ METOD: Sadece güncellenebilir alanları içeren bir map döndürür.
-  Map<String, dynamic> toMapForUpdate() {
-    return {
-      'type': type,
-      'category': category,
-      'subCategory': subCategory,
-      'amount': amount,
-      'date': DateFormat('yyyy-MM-dd').format(date),
-      'account': account,
-      'description': description,
-      'isRecurring': isRecurring,
-      'recurrenceRule': recurrenceRule,
-      'isNeed': isNeed,
-      'emotion': emotion,
-      'incomeAllocationPct': incomeAllocationPct,
-      // userId, createdAt gibi alanlar güncellemede gönderilmez.
-    };
-  }
-
-  TransactionModel copyWith({
-    String? id,
-    String? userId,
-    String? type,
-    String? category,
-    String? subCategory,
-    double? amount,
-    DateTime? date,
-    String? account,
-    String? description,
-    bool? isRecurring,
-    String? recurrenceRule,
-    bool? isNeed,
-    String? emotion,
-    int? incomeAllocationPct,
-    bool? isDeleted,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return TransactionModel(
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
-      type: type ?? this.type,
-      category: category ?? this.category,
-      subCategory: subCategory ?? this.subCategory,
-      amount: amount ?? this.amount,
-      date: date ?? this.date,
-      account: account ?? this.account,
-      description: description ?? this.description,
-      isRecurring: isRecurring ?? this.isRecurring,
-      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
-      isNeed: isNeed ?? this.isNeed,
-      emotion: emotion ?? this.emotion,
-      incomeAllocationPct: incomeAllocationPct ?? this.incomeAllocationPct,
-      isDeleted: isDeleted ?? this.isDeleted,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      createdAt: map['createdAt'] is Timestamp 
+          ? (map['createdAt'] as Timestamp).toDate() 
+          : DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
+      updatedAt: map['updatedAt'] is Timestamp 
+          ? (map['updatedAt'] as Timestamp).toDate() 
+          : DateTime.tryParse(map['updatedAt'] as String? ?? ''),
     );
   }
 }

@@ -2,67 +2,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-
-import '../../providers/transaction_providers.dart';
 import '../../providers/account_providers.dart';
-import '../../providers/analytics_providers.dart'; 
+import '../../providers/transaction_providers.dart';
 import '../../../data/models/transaction_model.dart';
 import 'transaction_card.dart';
 import 'transaction_flow_screen.dart';
-import 'batch_transaction_screen.dart'; // YENİ: Batch ekranı import edildi
+import 'batch_transaction_screen.dart';
+import 'transfer_form_screen.dart';
 
 class TransactionsScreen extends ConsumerWidget {
   const TransactionsScreen({super.key});
-
-  void _confirmAndDeleteTransaction(BuildContext context, WidgetRef ref, TransactionModel transaction) {
-    showDialog(
-      context: context,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          title: const Text('Confirm Delete'),
-          content: Text('Are you sure you want to delete this transaction: "${transaction.category} - ₺${transaction.amount.toStringAsFixed(2)}"?\n\nThis action cannot be undone.'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
-              child: const Text('Delete'),
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                try {
-                  if (transaction.id == null) throw Exception("Transaction ID is null, cannot delete.");
-                  await ref.read(transactionsProvider.notifier).deleteTransactionFromList(transaction.id!);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction deleted successfully!'), backgroundColor: Colors.green));
-                    ref.invalidate(accountsProvider);
-                    ref.invalidate(dashboardInsightsProvider);
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting transaction: ${e.toString().replaceFirst("Exception: ", "")}'), backgroundColor: Colors.redAccent));
-                  }
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _navigateToEditTransaction(BuildContext context, WidgetRef ref, TransactionModel transaction) {
-    Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (context) => TransactionFlowScreen(transactionToEdit: transaction)),
-    ).then((updated) {
-      if (updated == true && context.mounted) {
-        ref.invalidate(transactionsProvider);
-        ref.invalidate(accountsProvider);
-        ref.invalidate(dashboardInsightsProvider);
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -71,59 +20,43 @@ class TransactionsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Transactions'),
-        automaticallyImplyLeading: false, 
-        // DÜZENLEME: AppBar'a actions butonu eklendi
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.auto_awesome_rounded),
-            tooltip: 'AI ile Hızlı Giriş',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const BatchTransactionScreen()),
-              );
-            },
-          ),
-        ],
+        title: const Text('İşlemlerim'),
+        automaticallyImplyLeading: false,
       ),
       body: Column(
         children: [
-          _SummaryCard(
-            totalIncome: transactionsState.totalIncome,
-            totalExpense: transactionsState.totalExpense,
-            isLoading: transactionsState.isLoading,
-          ),
-          _FilterBar(),
+          _HeaderSection(),
           const Divider(height: 1, thickness: 1),
-
           Expanded(
-            child: transactionsState.isLoading && transactionsState.transactions.isEmpty
+            child: transactionsState.isLoading &&
+                    transactionsState.transactions.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : transactionsState.error != null
-                    ? Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Error: ${transactionsState.error}', textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error))))
+                    ? Center(
+                        child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text('Hata: ${transactionsState.error}',
+                                textAlign: TextAlign.center,
+                                style:
+                                    TextStyle(color: theme.colorScheme.error))))
                     : transactionsState.transactions.isEmpty
-                        ? const Center(child: Text('No transactions found for the selected period.'))
+                        ? const Center(
+                            child: Text(
+                                'Seçili kriterlere uygun işlem bulunamadı.'))
                         : RefreshIndicator(
-                            onRefresh: () async => ref.read(transactionsProvider.notifier).fetchTransactions(),
+                            onRefresh: () => ref
+                                .read(transactionsProvider.notifier)
+                                .fetchTransactions(),
                             child: ListView.builder(
+                              padding: const EdgeInsets.all(8.0),
                               itemCount: transactionsState.transactions.length,
                               itemBuilder: (context, index) {
-                                final tx = transactionsState.transactions[index];
+                                final tx =
+                                    transactionsState.transactions[index];
                                 return TransactionCard(
                                   transaction: tx,
-                                  onTap: () => _navigateToEditTransaction(context, ref, tx),
-                                  menuItems: [
-                                     PopupMenuItem<String>(
-                                      value: 'edit',
-                                      child: const ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit')),
-                                      onTap: () => _navigateToEditTransaction(context, ref, tx),
-                                    ),
-                                    PopupMenuItem<String>(
-                                      value: 'delete',
-                                      child: const ListTile(leading: Icon(Icons.delete_outline), title: Text('Delete', style: TextStyle(color: Colors.red))),
-                                      onTap: () => _confirmAndDeleteTransaction(context, ref, tx),
-                                    ),
-                                  ],
+                                  onTap: () => _navigateToEditTransaction(
+                                      context, ref, tx),
                                 );
                               },
                             ),
@@ -131,127 +64,206 @@ class TransactionsScreen extends ConsumerWidget {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddOptions(context),
+        label: const Text('Yeni İşlem Ekle'),
+        icon: const Icon(Icons.add),
+        backgroundColor: Colors.teal.shade700,
+      ),
     );
   }
-}
 
-// Ayrı bir widget olarak özet kartı
-class _SummaryCard extends StatelessWidget {
-  final double totalIncome;
-  final double totalExpense;
-  final bool isLoading;
+  void _navigateToEditTransaction(
+      BuildContext context, WidgetRef ref, TransactionModel transaction) {
+    Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+          builder: (context) =>
+              TransactionFlowScreen(transactionToEdit: transaction)),
+    );
+  }
 
-  const _SummaryCard({required this.totalIncome, required this.totalExpense, required this.isLoading});
-  
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺', decimalDigits: 2);
-    final net = totalIncome - totalExpense;
-
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      color: theme.cardColor,
-      child: isLoading
-        ? const Center(child: SizedBox(height: 48, child: LinearProgressIndicator()))
-        : Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+  void _showAddOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _buildSummaryItem('Total Income', numberFormat.format(totalIncome), Colors.green.shade700, theme),
-              _buildSummaryItem('Total Expense', numberFormat.format(totalExpense), theme.colorScheme.error, theme),
-              _buildSummaryItem('Net', numberFormat.format(net), net >= 0 ? Colors.blue.shade800 : theme.colorScheme.error, theme),
+              Text("Nasıl İşlem Eklemek İstersiniz?",
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: Icon(Icons.swap_horiz_rounded,
+                    size: 30, color: Colors.blue.shade700),
+                title: const Text('Hesaplar Arası Transfer'),
+                subtitle: const Text('Hesaplarınız arasında para aktarın.'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const TransferFormScreen()));
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: Icon(Icons.edit_note,
+                    size: 30, color: Colors.purple.shade700),
+                title: const Text('Manuel Giriş'),
+                subtitle: const Text('Tek bir işlemi adımlarla ekleyin.'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const TransactionFlowScreen()));
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: Icon(Icons.auto_awesome,
+                    size: 30, color: Colors.orange.shade700),
+                title: const Text('AI ile Hızlı Giriş'),
+                subtitle:
+                    const Text('Birden çok işlemi metin yazarak ekleyin.'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const BatchTransactionScreen()));
+                },
+              ),
             ],
           ),
-    );
-  }
-
-  Widget _buildSummaryItem(String label, String value, Color color, ThemeData theme) {
-    return Column(
-      children: [
-        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade700)),
-        const SizedBox(height: 4),
-        Text(value, style: theme.textTheme.titleMedium?.copyWith(color: color, fontWeight: FontWeight.bold)),
-      ],
+        );
+      },
     );
   }
 }
 
-
-// Ayrı bir widget olarak filtre çubuğu
-class _FilterBar extends ConsumerWidget {
-  const _FilterBar();
-
+class _HeaderSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentStartDate = ref.watch(transactionsProvider.select((s) => s.startDate));
-    final currentEndDate = ref.watch(transactionsProvider.select((s) => s.endDate));
+    final state = ref.watch(transactionsProvider);
+    final accounts = ref.watch(accountsProvider);
+    final theme = Theme.of(context);
+    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-      child: Row(
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      color: theme.scaffoldBackgroundColor,
+      child: Column(
         children: [
-          _buildQuickFilterChip(context, ref, 'This Month', QuickDateRange.thisMonth, currentStartDate, currentEndDate),
-          _buildQuickFilterChip(context, ref, 'Last 3 Months', QuickDateRange.last3Months, currentStartDate, currentEndDate),
-          _buildQuickFilterChip(context, ref, 'Last 6 Months', QuickDateRange.last6Months, currentStartDate, currentEndDate),
-          _buildQuickFilterChip(context, ref, 'All Time', QuickDateRange.allTime, currentStartDate, currentEndDate),
-          const SizedBox(width: 8),
-          ActionChip(
-            avatar: const Icon(Icons.calendar_today, size: 16),
-            label: const Text('Custom...'),
-            onPressed: () async {
-              final picked = await showDateRangePicker(
-                context: context,
-                initialDateRange: DateTimeRange(start: currentStartDate, end: currentEndDate),
-                firstDate: DateTime(2000),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
-              );
-              if (picked != null) {
-                ref.read(transactionsProvider.notifier).setDateRange(picked.start, picked.end);
-              }
-            },
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildSummaryItem('Gelir', numberFormat.format(state.totalIncome),
+                  Colors.green.shade700, theme),
+              _buildSummaryItem(
+                  'Gider',
+                  numberFormat.format(state.totalExpense),
+                  theme.colorScheme.error,
+                  theme),
+              _buildSummaryItem(
+                  'Net',
+                  numberFormat.format(state.totalIncome - state.totalExpense),
+                  Colors.blue.shade800,
+                  theme),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: _DateFilterChip(),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: accounts.when(
+                  data: (accList) => DropdownButtonFormField<String?>(
+                    value: state.filterAccount,
+                    decoration: const InputDecoration(
+                        labelText: 'Hesap',
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                    isExpanded: true,
+                    hint: const Text("Tüm Hesaplar"),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                          value: null, child: Text("Tüm Hesaplar")),
+                      ...accList.map((a) => DropdownMenuItem(
+                          value: a.accountName,
+                          child: Text(
+                            a.accountName,
+                            overflow: TextOverflow.ellipsis,
+                          )))
+                    ],
+                    onChanged: (value) {
+                      ref
+                          .read(transactionsProvider.notifier)
+                          .setAccountFilter(value);
+                    },
+                  ),
+                  loading: () => const SizedBox(),
+                  error: (e, s) => const Text("Hesaplar yüklenemedi"),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
-  
-  Widget _buildQuickFilterChip(BuildContext context, WidgetRef ref, String label, QuickDateRange range, DateTime currentStart, DateTime currentEnd) {
-    bool isSelected = false;
-    final now = DateTime.now();
-    DateTime checkStart;
-    
-    switch(range) {
-        case QuickDateRange.thisMonth:
-            checkStart = DateTime(now.year, now.month, 1);
-            if(currentStart.year == checkStart.year && currentStart.month == checkStart.month && currentStart.day == checkStart.day) isSelected = true;
-            break;
-        case QuickDateRange.last3Months:
-            checkStart = DateTime(now.year, now.month - 2, 1);
-            if(currentStart.year == checkStart.year && currentStart.month == checkStart.month && currentStart.day == checkStart.day) isSelected = true;
-            break;
-        case QuickDateRange.last6Months:
-            checkStart = DateTime(now.year, now.month - 5, 1);
-            if(currentStart.year == checkStart.year && currentStart.month == checkStart.month && currentStart.day == checkStart.day) isSelected = true;
-            break;
-        case QuickDateRange.allTime:
-            checkStart = DateTime(2000);
-            if(currentStart.year == checkStart.year) isSelected = true;
-            break;
-        default: break;
+
+  Widget _buildSummaryItem(
+      String label, String value, Color color, ThemeData theme) {
+    return Column(
+      children: [
+        Text(label,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: Colors.grey.shade700)),
+        const SizedBox(height: 4),
+        Text(value,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(color: color, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}
+
+class _DateFilterChip extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(transactionsProvider);
+    final notifier = ref.read(transactionsProvider.notifier);
+
+    String getChipLabel() {
+      final now = DateTime.now();
+      final startOfThisMonth = DateTime(now.year, now.month, 1);
+      if (state.startDate.year == startOfThisMonth.year &&
+          state.startDate.month == startOfThisMonth.month &&
+          state.startDate.day == startOfThisMonth.day) {
+        return "Bu Ay";
+      }
+      return "${DateFormat.yMd('tr').format(state.startDate)} - ${DateFormat.yMd('tr').format(state.endDate)}";
     }
-    
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: FilterChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (bool selected) {
-          if (selected) {
-            ref.read(transactionsProvider.notifier).setQuickDateRange(range);
-          }
-        },
-      ),
+
+    return ActionChip(
+      avatar: const Icon(Icons.calendar_today, size: 16),
+      label: Text(getChipLabel()),
+      onPressed: () async {
+        final picked = await showDateRangePicker(
+          context: context,
+          initialDateRange:
+              DateTimeRange(start: state.startDate, end: state.endDate),
+          firstDate: DateTime(2000),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+          locale: const Locale('tr', 'TR'),
+        );
+        if (picked != null) {
+          notifier.setDateRange(picked.start, picked.end);
+        }
+      },
     );
   }
 }

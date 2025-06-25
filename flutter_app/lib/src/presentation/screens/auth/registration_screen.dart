@@ -1,7 +1,7 @@
-// File: flutter_app/lib/src/presentation/screens/auth/registration_screen.dart
+// File: lib/src/presentation/screens/auth/registration_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart'; // For date formatting
+import 'package:intl/intl.dart';
 import '../../providers/auth_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -19,7 +19,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
   final _confirmPasswordController = TextEditingController();
   final _fullNameController = TextEditingController();
   final _usernameController = TextEditingController();
-  final _birthDateController = TextEditingController(); // To display selected date
+  final _birthDateController = TextEditingController();
   DateTime? _selectedBirthDate;
   bool _isLoading = false;
 
@@ -37,11 +37,12 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
   Future<void> _selectBirthDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _selectedBirthDate ?? DateTime(2000, 1, 1), 
+      locale: const Locale('tr', 'TR'),
+      initialDate: _selectedBirthDate ?? DateTime(2000, 1, 1),
       firstDate: DateTime(1900),
-      lastDate: DateTime.now().subtract(const Duration(days: 365 * 18 + 4)), 
-      helpText: 'Select your birth date',
-      confirmText: 'Select',
+      lastDate: DateTime.now().subtract(const Duration(days: 365 * 18 + 4)),
+      helpText: 'Doğum Tarihinizi Seçin',
+      confirmText: 'Seç',
     );
     if (picked != null && picked != _selectedBirthDate) {
       setState(() {
@@ -52,32 +53,22 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
   }
 
   Future<void> _registerUser() async {
-    print("REGISTER_SCREEN: _registerUser called.");
-    if (!_formKey.currentState!.validate()) {
-      print("REGISTER_SCREEN: Form is not valid.");
-      return; 
-    }
+    if (!_formKey.currentState!.validate()) return;
     if (_selectedBirthDate == null) {
-      print("REGISTER_SCREEN: Birth date not selected.");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Please select your birth date.'),
+              content: Text('Lütfen doğum tarihinizi seçin.'),
               backgroundColor: Colors.orangeAccent),
         );
       }
       return;
     }
 
-    setState(() {
-      print("REGISTER_SCREEN: Setting _isLoading = true");
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      print("REGISTER_SCREEN: Attempting signUpAndCreateProfile...");
       final authService = ref.read(authServiceProvider);
-
       await authService.signUpAndCreateProfile(
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -85,82 +76,50 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
         username: _usernameController.text.trim(),
         birthDate: _selectedBirthDate!,
       );
-      print("REGISTER_SCREEN: signUpAndCreateProfile call COMPLETED (may or may not have been successful internally).");
 
-      // If the above call didn't throw an exception, it means it was successful
-      // (including API call and no orphaned user deletion)
-      print("REGISTER_SCREEN: Now proceeding with signOut in RegistrationScreen success path...");
       await authService.signOut();
-      print("REGISTER_SCREEN: signOut in RegistrationScreen SUCCESSFUL.");
-      
+
       if (mounted) {
-        print("REGISTER_SCREEN: Showing success SnackBar...");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Registration successful! Please log in.'),
+              content: Text('Kayıt başarılı! Lütfen giriş yapın.'),
               backgroundColor: Colors.green),
         );
-        print("REGISTER_SCREEN: Attempting to pop screen...");
-        if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-            print("REGISTER_SCREEN: Screen popped.");
-        } else {
-            print("REGISTER_SCREEN: Screen CANNOT be popped.");
-        }
-      } else {
-          print("REGISTER_SCREEN: Success path, but widget not mounted before SnackBar/Pop.");
+        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
       }
     } on FirebaseAuthException catch (e) {
-      print("REGISTER_SCREEN: FirebaseAuthException caught in RegistrationScreen: ${e.code} - ${e.message}");
-      String errorMessage = 'Registration failed. Please try again.';
-      if (e.code == 'weak-password') {
-        errorMessage = 'The password provided is too weak.';
-      } else if (e.code == 'email-already-in-use') {
-        errorMessage = 'An account already exists for that email.';
-      } else if (e.code == 'invalid-email') {
-        errorMessage = 'The email address is not valid.';
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(errorMessage),
-              backgroundColor: Colors.redAccent),
-        );
-      }
-    } catch (e, s) { 
-      print("REGISTER_SCREEN: Generic Exception caught in RegistrationScreen: $e");
-      print("REGISTER_SCREEN: StackTrace for Generic Exception in RegistrationScreen: $s");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              // Display the specific error message from the AuthService if available
-              content: Text(e.toString().replaceFirst("Exception: ", "")), // Basic formatting
-              backgroundColor: Colors.redAccent),
-        );
-      }
+      String errorMessage = 'Kayıt başarısız. Lütfen tekrar deneyin.';
+      if (e.code == 'weak-password')
+        errorMessage = 'Belirlediğiniz şifre çok zayıf.';
+      else if (e.code == 'email-already-in-use')
+        errorMessage = 'Bu e-posta adresi ile zaten bir hesap mevcut.';
+      else if (e.code == 'invalid-email')
+        errorMessage = 'E-posta adresi geçerli değil.';
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(errorMessage), backgroundColor: Colors.redAccent));
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.toString().replaceFirst("Exception: ", "")),
+            backgroundColor: Colors.redAccent));
     } finally {
-      print("REGISTER_SCREEN: FINALLY block reached in RegistrationScreen.");
-      if (mounted) {
-        setState(() {
-          print("REGISTER_SCREEN: FINALLY - Setting _isLoading = false in RegistrationScreen");
-          _isLoading = false; 
-        });
-        print("REGISTER_SCREEN: FINALLY - setState for _isLoading called in RegistrationScreen.");
-      } else {
-          print("REGISTER_SCREEN: FINALLY block in RegistrationScreen, but widget not mounted.");
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ... THE REST OF YOUR BUILD METHOD (UNCHANGED from the previous complete RegistrationScreen code) ...
-    // (Includes all TextFormFields, ElevatedButton, TextButton)
-    // For brevity, I'm not repeating the entire build method here.
-    // Just make sure the _registerUser method above is correctly placed within the _RegistrationScreenState class.
-    // The build method from the "can you write the entire block?" response is correct.
-     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
+    final primaryColor = Colors.teal.shade700;
+    final inputDecoration = InputDecoration(
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: primaryColor, width: 2)),
+    );
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Hesap Oluştur')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -171,35 +130,35 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
               children: [
                 TextFormField(
                   controller: _fullNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name', 
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))),
-                  ),
-                  validator: (value) => value == null || value.isEmpty ? 'Please enter your full name' : null,
+                  decoration: inputDecoration.copyWith(
+                      labelText: 'Tam Adınız',
+                      prefixIcon: const Icon(Icons.person_outline)),
+                  validator: (value) => value == null || value.isEmpty
+                      ? 'Lütfen tam adınızı girin'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _usernameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Username', 
-                    prefixIcon: Icon(Icons.account_circle_outlined),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))),
-                  ),
-                  validator: (value) => value == null || value.isEmpty ? 'Please enter a username' : null,
+                  decoration: inputDecoration.copyWith(
+                      labelText: 'Kullanıcı Adı',
+                      prefixIcon: const Icon(Icons.account_circle_outlined)),
+                  validator: (value) => value == null || value.isEmpty
+                      ? 'Lütfen bir kullanıcı adı girin'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email', 
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))),
-                  ),
+                  decoration: inputDecoration.copyWith(
+                      labelText: 'E-posta',
+                      prefixIcon: const Icon(Icons.email_outlined)),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Please enter your email';
-                    if (!value.contains('@') || !value.contains('.')) return 'Please enter a valid email';
+                    if (value == null || value.isEmpty)
+                      return 'Lütfen e-posta adresinizi girin';
+                    if (!value.contains('@') || !value.contains('.'))
+                      return 'Geçerli bir e-posta adresi girin';
                     return null;
                   },
                 ),
@@ -207,14 +166,14 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Password', 
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))),
-                  ),
+                  decoration: inputDecoration.copyWith(
+                      labelText: 'Şifre',
+                      prefixIcon: const Icon(Icons.lock_outline)),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Please enter a password';
-                    if (value.length < 6) return 'Password must be at least 6 characters';
+                    if (value == null || value.isEmpty)
+                      return 'Lütfen bir şifre belirleyin';
+                    if (value.length < 6)
+                      return 'Şifre en az 6 karakter olmalıdır';
                     return null;
                   },
                 ),
@@ -222,14 +181,14 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm Password', 
-                    prefixIcon: Icon(Icons.lock_person_outlined),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))),
-                  ),
+                  decoration: inputDecoration.copyWith(
+                      labelText: 'Şifreyi Onayla',
+                      prefixIcon: const Icon(Icons.lock_person_outlined)),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Please confirm your password';
-                    if (value != _passwordController.text) return 'Passwords do not match';
+                    if (value == null || value.isEmpty)
+                      return 'Lütfen şifrenizi tekrar girin';
+                    if (value != _passwordController.text)
+                      return 'Şifreler uyuşmuyor';
                     return null;
                   },
                 ),
@@ -237,36 +196,44 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
                 TextFormField(
                   controller: _birthDateController,
                   readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: 'Birth Date',
-                    prefixIcon: const Icon(Icons.calendar_today_outlined),
-                    hintText: _selectedBirthDate == null ? 'Select your birth date' : null,
-                    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))),
-                  ),
+                  decoration: inputDecoration.copyWith(
+                      labelText: 'Doğum Tarihi',
+                      hintText: 'Doğum tarihinizi seçin',
+                      suffixIcon: IconButton(
+                          icon: const Icon(Icons.calendar_today_outlined),
+                          onPressed: () => _selectBirthDate(context))),
                   onTap: () => _selectBirthDate(context),
-                  validator: (value) => _selectedBirthDate == null ? 'Please select your birth date' : null,
+                  validator: (value) => _selectedBirthDate == null
+                      ? 'Lütfen doğum tarihinizi seçin'
+                      : null,
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _registerUser,
                   style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
                     shape: RoundedRectangleBorder(
-                       borderRadius: BorderRadius.circular(12.0),
-                    ),
+                        borderRadius: BorderRadius.circular(12.0)),
                   ),
                   child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Register', style: TextStyle(fontSize: 16)),
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Kaydol', style: TextStyle(fontSize: 16)),
                 ),
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: _isLoading ? null : () {
-                     if (Navigator.of(context).canPop()) {
-                        Navigator.of(context).pop();
-                     }
-                  },
-                  child: const Text('Already have an account? Login'),
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          if (Navigator.of(context).canPop())
+                            Navigator.of(context).pop();
+                        },
+                  child: const Text('Zaten bir hesabınız var mı? Giriş yapın'),
                 ),
               ],
             ),

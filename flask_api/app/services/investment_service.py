@@ -10,6 +10,8 @@ from functools import lru_cache
 import pandas as pd
 from google.cloud.firestore_v1.base_query import FieldFilter
 from .technical_analysis_service import TechnicalAnalysisService
+from .ai_service import AIService
+from .user_service import UserService
 
 
 class InvestmentService:
@@ -174,7 +176,6 @@ class InvestmentService:
     @staticmethod
     def get_portfolio_summary(user_id):
         try:
-            # 1. Adım: Hesapları ve Holdingleri Çek
             acc_q = (InvestmentService._get_accounts_collection()
                      .where(filter=FieldFilter("userId", "==", user_id))
                      .where(filter=FieldFilter("accountType", "==", "investment")))
@@ -191,7 +192,6 @@ class InvestmentService:
 
             symbols = list(set(h.to_dict()["assetSymbol"] for h in all_holdings))
             
-            # 2. Adım: Fiyatları Sağlam Bir Yöntemle Çek
             live_prices = {}
             if symbols:
                 price_data = yf.download(symbols, period="1d", progress=False) 
@@ -209,7 +209,6 @@ class InvestmentService:
                                 if not price_series.empty:
                                     live_prices[symbol] = float(price_series.iloc[-1])
             
-            # 3. Adım: Portföyü Hesapla
             usd_try_rate = InvestmentService.get_usdtry_rate()
             detailed_holdings = []
             total_portfolio_value_try = 0.0
@@ -274,6 +273,7 @@ class InvestmentService:
         except Exception as e:
             traceback.print_exc()
             return {"success": False, "error": str(e)}, 500
+
     @staticmethod
     def list_transactions(user_id, account_id=None, asset_symbol=None):
         try:
@@ -368,12 +368,7 @@ class InvestmentService:
 
     @staticmethod
     def override_holding(holding_id, data):
-        """
-        Bir holding'in tüm işlem geçmişini siler ve verilen yeni miktar/maliyetle
-        tek bir 'buy' işlemi oluşturur.
-        """
         try:
-            # 1. Holding belgesini al
             hold_ref = InvestmentService._get_holdings_collection().document(holding_id)
             doc = hold_ref.get()
             if not doc.exists:
@@ -384,7 +379,6 @@ class InvestmentService:
             account_id = h_data["accountId"]
             asset_symbol = h_data["assetSymbol"]
             
-            # 2. Bu holding'e ait tüm eski işlemleri sil
             txs_ref = InvestmentService._get_transactions_collection()
             q = (txs_ref
                  .where(filter=FieldFilter("accountId", "==", account_id))
@@ -395,7 +389,6 @@ class InvestmentService:
                 batch.delete(tx_doc.reference)
             batch.commit()
 
-            # 3. Yeni verilerle tek bir 'buy' işlemi oluştur
             new_quantity = float(data["quantity"])
             new_average_cost = float(data["averageCost"])
             
@@ -414,7 +407,6 @@ class InvestmentService:
             new_tx_ref = txs_ref.document()
             new_tx_ref.set(new_tx_payload)
             
-            # 4. Holding'i yeniden hesaplat (bu, tek işleme göre güncelleyecektir)
             txn = db.transaction()
             InvestmentService._recalculate_holding(txn, account_id, user_id, asset_symbol)
 
@@ -425,53 +417,71 @@ class InvestmentService:
             return {"success": False, "error": str(e)}, 500
 
     @staticmethod
-    def get_asset_analysis(symbol):
+    @staticmethod
+    def get_asset_analysis(symbol, risk_profile='medium'):
         try:
-            df = yf.download(symbol, period="90d", interval="1h", progress=False)
+            # En uzun vadeye yetecek kadar veri çekiyoruz (1 yıl)
+            df = yf.download(symbol, period="1y", interval="1d", progress=False)
             if df.empty:
                 return {"success": False, "error": "Veri bulunamadı."}, 404
-
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-
-            df = df.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
-            closes = df["Close"]
-
-            rsi = TechnicalAnalysisService.calculate_rsi(closes)
-            macd_line, signal_line = TechnicalAnalysisService.calculate_macd(closes)
-            ema50 = TechnicalAnalysisService.calculate_ema(closes, span=50)
-            sl, tp = TechnicalAnalysisService.calculate_sl_tp(closes)
             
-            verdict = TechnicalAnalysisService.get_analysis_verdict(
-                price=closes.iloc[-1], ema50=ema50, rsi=rsi,
-                macd_line=macd_line, signal_line=signal_line
-            )
+            # Yorumlar ve göstergeler için tam analizi yap
+            full_analysis = TechnicalAnalysisService.get_full_analysis(df, symbol, risk_profile)
+            if not full_analysis:
+                return {"success": False, "error": "Analiz verisi oluşturulamadı."}, 500
 
-            chart_df = df[["Close"]].copy()
-            chart_df["timestamp_ms"] = (chart_df.index.astype(int) / 10**6).astype(int)
-            chart_data = (
-                chart_df[["timestamp_ms", "Close"]]
-                .rename(columns={"timestamp_ms": "timestamp", "Close": "price"})
-                .to_dict("records")
-            )
+            # --- YENİ: VADELERE GÖRE GRAFİK VERİSİ OLUŞTURMA ---
+            chart_data_by_horizon = {}
+            periods = {"shortTerm": 30, "midTerm": 90, "longTerm": 365}
+            
+            for horizon, days in periods.items():
+                chart_df = df[["Close"]].copy().tail(days)
+                chart_df["timestamp_ms"] = (chart_df.index.astype(int) / 10**6).astype(int)
+                chart_data = (
+                    chart_df[["timestamp_ms", "Close"]]
+                    .rename(columns={"timestamp_ms": "timestamp", "Close": "price"})
+                    .to_dict("records")
+                )
+                chart_data_by_horizon[horizon] = chart_data
+            
+            full_analysis["chartData"] = chart_data_by_horizon
+            # ----------------------------------------------------
+            
+            return {"success": True, "analysis": full_analysis}, 200
+        except Exception as e:
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}, 500
 
-            result = {
-                "symbol": symbol,
-                "lastPrice": round(closes.iloc[-1], 4),
-                "rsi": round(rsi, 2) if rsi is not None else None,
-                "macd": {
-                    "macdLine": round(macd_line, 4) if macd_line is not None else None,
-                    "signalLine": round(signal_line, 4) if signal_line is not None else None
-                },
-                "ema50": round(ema50, 4) if ema50 is not None else None,
-                "volatilityLevels": {
-                    "stopLoss": round(sl, 4) if sl is not None else None,
-                    "takeProfit": round(tp, 4) if tp is not None else None
-                },
-                "verdict": verdict,
-                "chartData": chart_data
-            }
-            return {"success": True, "analysis": result}, 200
+    @staticmethod
+    def get_opportunities(user_id, market, horizon):
+        try:
+            asset_list = []
+            if market == 'bist':
+                asset_list = ["GARAN.IS", "THYAO.IS", "TUPRS.IS", "FROTO.IS", "EREGL.IS", "SAHOL.IS", "KCHOL.IS"]
+            elif market == 'crypto':
+                asset_list = ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "DOGE-USD", "BNB-USD"]
+            elif market == 'us_stocks':
+                 asset_list = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA"]
+
+            assets_for_ai = []
+            for symbol in asset_list:
+                df = yf.download(symbol, period="1y", interval="1d", progress=False, timeout=100)
+                if not df.empty:
+                    # Fırsatlar için her zaman nötr bir risk profiliyle temel analiz yapılır, kişiselleştirme yorumda olur.
+                    analysis_data = TechnicalAnalysisService.get_full_analysis(df, symbol, risk_profile="medium")
+                    if analysis_data and 'analysis' in analysis_data and horizon in analysis_data['analysis']:
+                       assets_for_ai.append({
+                           "symbol": symbol,
+                           "indicators": analysis_data['analysis'][horizon]['indicators']
+                       })
+            
+            user_profile_response = UserService.get_user_profile(user_id)
+            if not user_profile_response.get("success"):
+                return {"success": False, "error": "Kullanıcı profili alınamadı."}, 404
+            user_profile = user_profile_response["profile"]
+            
+            opportunities = AIService.find_opportunities_for_user(assets_for_ai, user_profile, horizon)
+            return {"success": True, "opportunities": opportunities}, 200
         except Exception as e:
             traceback.print_exc()
             return {"success": False, "error": str(e)}, 500

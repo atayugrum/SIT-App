@@ -23,7 +23,8 @@ class SavingsGoalModel {
   });
 
   // İlerleme yüzdesini hesaplayan bir yardımcı getter
-  double get progress => (targetAmount > 0) ? (currentAmount / targetAmount) : 0.0;
+  double get progress =>
+      (targetAmount > 0) ? (currentAmount / targetAmount) : 0.0;
 
   factory SavingsGoalModel.fromMap(Map<String, dynamic> map) {
     return SavingsGoalModel(
@@ -32,12 +33,12 @@ class SavingsGoalModel {
       title: map['title'] as String,
       targetAmount: (map['targetAmount'] as num).toDouble(),
       currentAmount: (map['currentAmount'] as num).toDouble(),
-      targetDate: (map['targetDate'] is Timestamp) 
-          ? (map['targetDate'] as Timestamp).toDate() 
+      targetDate: (map['targetDate'] is Timestamp)
+          ? (map['targetDate'] as Timestamp).toDate()
           : DateTime.parse(map['targetDate'] as String),
       isActive: map['isActive'] as bool,
-      createdAt: (map['createdAt'] is Timestamp) 
-          ? (map['createdAt'] as Timestamp).toDate() 
+      createdAt: (map['createdAt'] is Timestamp)
+          ? (map['createdAt'] as Timestamp).toDate()
           : DateTime.parse(map['createdAt'] as String),
     );
   }

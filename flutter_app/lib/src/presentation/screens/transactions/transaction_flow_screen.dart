@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/constants.dart';
 import '../../providers/transaction_form_provider.dart';
 import '../../../core/categories.dart';
 import '../../providers/transaction_providers.dart';
@@ -34,7 +35,6 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
 
   List<Widget> _buildSteps(
       TransactionFormData formData, VoidCallback goToNextPage) {
-    // sabit key, artık date bazlı rebuild yapmıyor
     const detailsStepKey = ValueKey('detailsStep_flow');
 
     return <Widget>[
@@ -119,10 +119,10 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
 
     if (_currentPage == 0 && formData.type.isEmpty) {
       canProceed = false;
-      validationMessage = 'Please select a transaction type.';
+      validationMessage = 'Lütfen bir işlem türü seçin.';
     } else if (_currentPage == 1 && formData.category == null) {
       canProceed = false;
-      validationMessage = 'Please select a category.';
+      validationMessage = 'Lütfen bir kategori seçin.';
     }
 
     if (!canProceed) {
@@ -163,7 +163,7 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please correct errors in the form.'),
+            content: Text('Lütfen formdaki hataları düzeltin.'),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -175,17 +175,15 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
 
     if (mounted) setState(() => _isSaving = true);
 
-    // debug: kaydetmeden önce formData.amount
-    final formData = ref.read(transactionFormNotifierProvider);
-    debugPrint('[FORM DATA] amount = ${formData.amount}');
-
+    // HATA DÜZELTMESİ: Kullanılmayan 'formData' değişkeni bu satırda kaldırıldı.
     final notifier = ref.read(transactionFormNotifierProvider.notifier);
     final modelToSave = notifier.toTransactionModel();
+
     if (modelToSave == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Form data is incomplete. Cannot save.'),
+            content: Text('Form verileri eksik. Kaydedilemiyor.'),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -200,19 +198,17 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
             .read(transactionsProvider.notifier)
             .updateTransactionInList(modelToSave.id!, modelToSave);
       } else {
-        await ref.read(transactionsProvider.notifier).addTransaction(modelToSave);
+        await ref
+            .read(transactionsProvider.notifier)
+            .addTransaction(modelToSave);
       }
 
       if (mounted) {
-        // unused_result uyarısını çözmek için atama yapıyoruz
         ref.invalidate(accountsProvider);
-
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Transaction ${_isEditMode ? "updated" : "saved"}!',
-            ),
+            content:
+                Text(_isEditMode ? 'İşlem güncellendi!' : 'İşlem kaydedildi!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -221,7 +217,7 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
           notifier.partialResetForNewEntry(
             originalType: modelToSave.type,
             originalDate: modelToSave.date,
-            originalAccount: modelToSave.account,
+            originalAccount: modelToSave.accountId,
             originalCategory: modelToSave.category,
             originalSubCategory: modelToSave.subCategory,
           );
@@ -236,7 +232,8 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString().replaceFirst("Exception: ", "")}'),
+            content:
+                Text('Hata: ${e.toString().replaceFirst("Exception: ", "")}'),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -250,14 +247,18 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
   Widget build(BuildContext context) {
     final formData = ref.watch(transactionFormNotifierProvider);
     final steps = _buildSteps(formData, _goToNextPage);
-    final theme = Theme.of(context);
     final bool isLastStep = _currentPage == steps.length - 1;
-    String appBarTitle = _isEditMode ? 'Edit Transaction' : 'Add Transaction';
-    appBarTitle += ' (Step ${_currentPage + 1}/${steps.length})';
+    String appBarTitle = _isEditMode ? 'İşlemi Düzenle' : 'İşlem Ekle';
+    appBarTitle += ' (Adım ${_currentPage + 1}/${steps.length})';
+    const primaryColor = Color(0xFF00796B); // Colors.teal.shade700
 
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         title: Text(appBarTitle),
+        backgroundColor: Colors.grey.shade100,
+        foregroundColor: Colors.grey.shade800,
+        elevation: 0,
         leading: _currentPage > 0
             ? IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new),
@@ -280,7 +281,6 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            // step indicator
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List<Widget>.generate(steps.length, (index) {
@@ -291,14 +291,13 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: _currentPage == index
-                        ? theme.primaryColor
+                        ? primaryColor
                         : Colors.grey.shade400,
                   ),
                 );
               }),
             ),
-            const SizedBox(height: 10),
-
+            const SizedBox(height: 16),
             if (isLastStep)
               Row(
                 children: <Widget>[
@@ -309,15 +308,19 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.add_circle_outline),
-                        label: const Text('Save & Add Another'),
-                        onPressed:
-                            _isSaving ? null : () => _handleSave(addAnother: true),
+                        label: const Text('Kaydet & Yeni Ekle'),
+                        onPressed: _isSaving
+                            ? null
+                            : () => _handleSave(addAnother: true),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: BorderSide(color: theme.colorScheme.primary),
+                          side: const BorderSide(color: primaryColor),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.0)),
                         ),
                       ),
                     ),
@@ -335,33 +338,25 @@ class _TransactionFlowScreenState extends ConsumerState<TransactionFlowScreen> {
                               ),
                             )
                           : const Icon(Icons.check_circle_outline),
-                      label: Text(_isEditMode ? 'Update & Close' : 'Save & Close'),
-                      onPressed: _isSaving ? null : () => _handleSave(addAnother: false),
+                      label: Text(_isEditMode
+                          ? 'Güncelle ve Kapat'
+                          : 'Kaydet ve Kapat'),
+                      onPressed: _isSaving
+                          ? null
+                          : () => _handleSave(addAnother: false),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.primary,
-                        foregroundColor: theme.colorScheme.onPrimary,
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12.0)),
                       ),
                     ),
                   ),
                 ],
               )
             else
-              Row(
-                mainAxisAlignment:
-                    _currentPage > 0 ? MainAxisAlignment.spaceBetween : MainAxisAlignment.end,
-                children: <Widget>[
-                  if (_currentPage > 0)
-                    TextButton.icon(
-                      icon: const Icon(Icons.navigate_before),
-                      label: const Text('Previous'),
-                      onPressed: _isSaving ? null : _goToPreviousPage,
-                    )
-                  else
-                    const Spacer(),
-                  const Spacer(),
-                ],
-              ),
+              const SizedBox.shrink(),
           ],
         ),
       ),
@@ -389,14 +384,14 @@ class _TransactionTypeSelectionStep extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            'What kind of transaction?',
+            'Ne tür bir işlem?',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 32),
           _TypeButton(
             key: const ValueKey('incomeButton'),
-            label: 'Income',
+            label: 'Gelir',
             icon: Icons.arrow_downward_rounded,
             isSelected: selectedType == 'income',
             onPressed: () => onTypeSelected('income'),
@@ -405,7 +400,7 @@ class _TransactionTypeSelectionStep extends StatelessWidget {
           const SizedBox(height: 20),
           _TypeButton(
             key: const ValueKey('expenseButton'),
-            label: 'Expense',
+            label: 'Gider',
             icon: Icons.arrow_upward_rounded,
             isSelected: selectedType == 'expense',
             onPressed: () => onTypeSelected('expense'),
@@ -439,6 +434,7 @@ class _CategorySelectionStep extends ConsumerWidget {
     final categoryController = TextEditingController();
     final subcategoriesController = TextEditingController();
     bool isLoading = false;
+    const primaryColor = Color(0xFF00796B);
 
     await showDialog<void>(
       context: context,
@@ -446,8 +442,12 @@ class _CategorySelectionStep extends ConsumerWidget {
       builder: (dialogCtx) {
         return StatefulBuilder(builder: (ctx, setState) {
           return AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.0)),
             title: Text(
-              'Add New ${currentTransactionType == 'income' ? 'Income' : 'Expense'} Category',
+              currentTransactionType == 'income'
+                  ? 'Yeni Gelir Kategorisi Ekle'
+                  : 'Yeni Gider Kategorisi Ekle',
             ),
             content: Form(
               key: formKey,
@@ -456,17 +456,31 @@ class _CategorySelectionStep extends ConsumerWidget {
                 children: <Widget>[
                   TextFormField(
                     controller: categoryController,
-                    decoration: const InputDecoration(labelText: 'Category Name *'),
+                    decoration: InputDecoration(
+                      labelText: 'Kategori Adı *',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: primaryColor, width: 2)),
+                    ),
                     validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Please enter a category name'
+                        ? 'Lütfen bir kategori adı girin'
                         : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: subcategoriesController,
-                    decoration: const InputDecoration(
-                      labelText: 'Subcategories (Optional)',
-                      hintText: 'e.g., Sub1, Sub2',
+                    decoration: InputDecoration(
+                      labelText: 'Alt Kategoriler (İsteğe Bağlı)',
+                      hintText: 'Örn: Alt1, Alt2',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: primaryColor, width: 2)),
                     ),
                   ),
                 ],
@@ -475,9 +489,17 @@ class _CategorySelectionStep extends ConsumerWidget {
             actions: <Widget>[
               TextButton(
                 onPressed: isLoading ? null : () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
+                child: const Text('İptal'),
               ),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0)),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                ),
                 onPressed: isLoading
                     ? null
                     : () async {
@@ -485,9 +507,10 @@ class _CategorySelectionStep extends ConsumerWidget {
                         setState(() => isLoading = true);
                         final user = ref.read(currentUserProvider);
                         if (user == null) {
+                          if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('User not logged in.'),
+                              content: Text('Kullanıcı girişi yapılmamış.'),
                               backgroundColor: Colors.red,
                             ),
                           );
@@ -514,25 +537,36 @@ class _CategorySelectionStep extends ConsumerWidget {
                               : expenseCustomCategoriesProvider;
                           await ref.read(provider.notifier).addCategory(newCat);
                           ref.invalidate(allCustomCategoriesProvider);
+
+                          // DÜZELTME: `await` sonrası context kullanımı öncesi kontrol
+                          if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('${newCat.categoryName} added!'),
+                              content:
+                                  Text("'${newCat.categoryName}' eklendi!"),
                               backgroundColor: Colors.green,
                             ),
                           );
                           onCategorySelected(newCat.categoryName);
+
+                          // DÜZELTME: `await` sonrası context kullanımı öncesi kontrol
+                          if (!ctx.mounted) return;
                           Navigator.of(ctx).pop();
                         } catch (e) {
+                          // DÜZELTME: `await` sonrası context kullanımı öncesi kontrol
+                          if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Failed: ${e.toString().replaceFirst("Exception: ", "")}',
-                              ),
+                                  'Başarısız: ${e.toString().replaceFirst("Exception: ", "")}'),
                               backgroundColor: Colors.red,
                             ),
                           );
                         } finally {
-                          setState(() => isLoading = false);
+                          // EK İYİLEŞTİRME: Diyalogun hala ekranda olduğundan emin ol
+                          if (ctx.mounted) {
+                            setState(() => isLoading = false);
+                          }
                         }
                       },
                 child: isLoading
@@ -540,11 +574,9 @@ class _CategorySelectionStep extends ConsumerWidget {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                            strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text('Save Category'),
+                    : const Text('Kategoriyi Kaydet'),
               ),
             ],
           );
@@ -555,11 +587,13 @@ class _CategorySelectionStep extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final predefined = transactionType == 'income' ? incomeCategories : expenseCategories;
+    const primaryColor = Color(0xFF00796B);
+    const tintedBackgroundColor = Color(0xFFE0F2F1);
+    final predefined =
+        transactionType == 'income' ? incomeCategories : expenseCategories;
     final asyncCats = transactionType == 'income'
         ? ref.watch(incomeCustomCategoriesProvider)
         : ref.watch(expenseCustomCategoriesProvider);
-    final theme = Theme.of(context);
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -567,24 +601,29 @@ class _CategorySelectionStep extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            'Select a Category for your ${transactionType == 'income' ? 'Income' : 'Expense'}',
+            '${transactionType == 'income' ? 'Geliriniz' : 'Gideriniz'} için bir Kategori Seçin',
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(fontSize: 20),
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontSize: 20),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             icon: const Icon(Icons.add_circle_outline),
-            label: const Text('Add New Custom Category'),
-            onPressed: () => _showAddCategoryDialog(context, ref, transactionType),
+            label: const Text('Yeni Özel Kategori Ekle'),
+            onPressed: () =>
+                _showAddCategoryDialog(context, ref, transactionType),
             style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              textStyle: theme.textTheme.labelLarge,
-              side: BorderSide(color: theme.primaryColor),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              side: const BorderSide(color: primaryColor),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.0)),
             ),
           ),
           const SizedBox(height: 12),
           const Text(
-            'Or choose from below:',
+            'Veya aşağıdakilerden birini seçin:',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey),
           ),
@@ -592,10 +631,14 @@ class _CategorySelectionStep extends ConsumerWidget {
           Expanded(
             child: asyncCats.when(
               data: (customs) {
-                final keys = <String>[...predefined.keys, ...customs.map((c) => c.categoryName)];
+                final keys = <String>[
+                  ...predefined.keys,
+                  ...customs.map((c) => c.categoryName)
+                ];
                 final icons = <String, IconData>{}
                   ..addAll(predefined)
-                  ..addEntries(customs.map((c) => MapEntry(c.categoryName, Icons.label_outline)));
+                  ..addEntries(customs.map(
+                      (c) => MapEntry(c.categoryName, Icons.label_outline)));
                 final unique = keys.toSet().toList()..sort();
                 return GridView.builder(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -615,32 +658,42 @@ class _CategorySelectionStep extends ConsumerWidget {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
-                            color: isSel ? theme.primaryColor : Colors.transparent,
-                            width: 2,
-                          ),
+                              color: isSel ? primaryColor : Colors.transparent,
+                              width: 2.5),
                         ),
-                        color: isSel
-                            ? theme.primaryColor.withOpacity(0.1)
-                            : theme.cardColor,
+                        color: isSel ? tintedBackgroundColor : Colors.white,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
                             Icon(
                               icons[name] ?? Icons.help_outline,
                               size: 36,
+                              // DÜZELTME: withOpacity yerine withAlpha kullanıldı
                               color: isSel
-                                  ? theme.primaryColor
-                                  : theme.iconTheme.color!.withOpacity(0.7),
+                                  ? primaryColor
+                                  : Theme.of(context)
+                                      .iconTheme
+                                      .color!
+                                      .withAlpha(179), // 0.7 opacity
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              name,
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                color: isSel ? theme.primaryColor : null,
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4.0),
+                              child: Text(
+                                name,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      fontWeight: isSel
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: isSel ? primaryColor : null,
+                                    ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -650,7 +703,7 @@ class _CategorySelectionStep extends ConsumerWidget {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, stack) => Center(child: Text('Error: $err')),
+              error: (err, stack) => Center(child: Text('Hata: $err')),
             ),
           ),
         ],
@@ -678,16 +731,21 @@ class _SubCategorySelectionStep extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    const primaryColor = Color(0xFF00796B);
+    const tintedBackgroundColor = Color(0xFFE0F2F1);
+
     if (mainCategoryName == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         onProceedWithoutSubcategory();
       });
       return const Center(
-        child: Text('No main category selected. Proceeding…'),
+        child: Text('Ana kategori seçilmedi. Devam ediliyor...'),
       );
     }
 
-    final predefinedSubs = transactionType == 'income' ? incomeSubcategories : expenseSubcategories;
+    final predefinedSubs = transactionType == 'income'
+        ? incomeSubcategories
+        : expenseSubcategories;
     final subs = <String>[];
     if (predefinedSubs.containsKey(mainCategoryName)) {
       subs.addAll(predefinedSubs[mainCategoryName]!);
@@ -703,7 +761,8 @@ class _SubCategorySelectionStep extends ConsumerWidget {
     asyncCats.when(
       data: (cats) {
         isLoading = false;
-        final found = cats.where((c) => c.categoryName == mainCategoryName && !c.isArchived);
+        final found = cats
+            .where((c) => c.categoryName == mainCategoryName && !c.isArchived);
         if (found.isNotEmpty) {
           customMain = found.first;
           for (var s in customMain!.subcategories) {
@@ -729,21 +788,29 @@ class _SubCategorySelectionStep extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Text(
-              'No Subcategories for "$mainCategoryName".',
+              '"$mainCategoryName" için Alt Kategori Yok.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 20),
             if (canAdd)
               ElevatedButton.icon(
-                onPressed: () => _showAddSubDialog(context, ref, mainCategoryName!),
+                onPressed: () =>
+                    _showAddSubDialog(context, ref, mainCategoryName!),
                 icon: const Icon(Icons.add_circle_outline),
-                label: const Text('Add First Subcategory'),
+                label: const Text('İlk Alt Kategoriyi Ekle'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0)),
+                ),
               ),
             const SizedBox(height: 10),
             TextButton(
               onPressed: onProceedWithoutSubcategory,
-              child: const Text('Continue without Subcategory'),
+              child: const Text('Alt Kategori Olmadan Devam Et'),
             ),
           ],
         ),
@@ -756,19 +823,24 @@ class _SubCategorySelectionStep extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            'Select Subcategory for "$mainCategoryName"',
+            '"$mainCategoryName" için Alt Kategori Seçin',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontSize: 20),
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontSize: 20),
           ),
           const SizedBox(height: 12),
           if (canAdd)
             OutlinedButton.icon(
-              onPressed: () => _showAddSubDialog(context, ref, mainCategoryName!),
+              onPressed: () =>
+                  _showAddSubDialog(context, ref, mainCategoryName!),
               icon: const Icon(Icons.add_circle_outline),
-              label: Text("Add New Subcategory"),
+              label: const Text("Yeni Alt Kategori Ekle"),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Theme.of(context).primaryColor),
-              ),
+                  side: const BorderSide(color: primaryColor),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0))),
             ),
           const SizedBox(height: 12),
           Expanded(
@@ -778,21 +850,24 @@ class _SubCategorySelectionStep extends ConsumerWidget {
                 final name = subs[i];
                 final sel = name == selectedSubCategory;
                 return Card(
-                  elevation: sel ? 4 : 1,
+                  elevation: sel ? 3 : 1,
+                  color: sel ? tintedBackgroundColor : Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     side: BorderSide(
-                      color: sel ? Theme.of(context).primaryColor : Colors.transparent,
-                      width: 1.5,
+                      color: sel ? primaryColor : Colors.transparent,
+                      width: 2,
                     ),
                   ),
                   child: ListTile(
                     title: Text(
                       name,
-                      style: TextStyle(fontWeight: sel ? FontWeight.bold : FontWeight.normal),
+                      style: TextStyle(
+                          fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                          color: sel ? primaryColor : null),
                     ),
-                    selected: sel,
-                    selectedTileColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     onTap: () => onSubCategorySelected(name),
                   ),
                 );
@@ -802,7 +877,7 @@ class _SubCategorySelectionStep extends ConsumerWidget {
           const SizedBox(height: 16),
           TextButton(
             onPressed: onProceedWithoutSubcategory,
-            child: const Text('Skip Subcategory'),
+            child: const Text('Alt Kategoriyi Atla'),
           ),
         ],
       ),
@@ -814,6 +889,7 @@ class _SubCategorySelectionStep extends ConsumerWidget {
     final formKey = GlobalKey<FormState>();
     final ctrl = TextEditingController();
     bool loading = false;
+    const primaryColor = Color(0xFF00796B);
 
     final cats = transactionType == 'income'
         ? ref.read(incomeCustomCategoriesProvider)
@@ -822,7 +898,8 @@ class _SubCategorySelectionStep extends ConsumerWidget {
     UserCategoryModel? target;
     if (cats.hasValue) {
       try {
-        target = cats.value!.firstWhere((c) => c.categoryName == mainCatName && !c.isArchived);
+        target = cats.value!
+            .firstWhere((c) => c.categoryName == mainCatName && !c.isArchived);
       } catch (_) {}
     }
     final can = target?.id != null;
@@ -833,7 +910,9 @@ class _SubCategorySelectionStep extends ConsumerWidget {
       builder: (dCtx) {
         return StatefulBuilder(builder: (ctx, setState) {
           return AlertDialog(
-            title: Text('Add Subcategory to "$mainCatName"'),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.0)),
+            title: Text('"$mainCatName" Kategorisine Alt Kategori Ekle'),
             content: Form(
               key: formKey,
               child: Column(
@@ -844,22 +923,30 @@ class _SubCategorySelectionStep extends ConsumerWidget {
                       padding: const EdgeInsets.only(bottom: 12.0),
                       child: Text(
                         cats is AsyncLoading
-                            ? 'Loading…'
-                            : 'Subcategories only for custom categories.',
-                        style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+                            ? 'Yükleniyor...'
+                            : 'Alt kategoriler yalnızca özel kategoriler için eklenebilir.',
+                        style:
+                            TextStyle(color: Theme.of(ctx).colorScheme.error),
                       ),
                     ),
                   TextFormField(
                     controller: ctrl,
                     enabled: can,
-                    decoration: const InputDecoration(labelText: 'Name *'),
+                    decoration: InputDecoration(
+                        labelText: 'İsim *',
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: primaryColor, width: 2))),
                     validator: (v) {
                       if (!can) return null;
-                      if (v == null || v.trim().isEmpty) return 'Enter name';
+                      if (v == null || v.trim().isEmpty) return 'İsim girin';
                       if (target!.subcategories
                           .map((s) => s.toLowerCase())
                           .contains(v.trim().toLowerCase())) {
-                        return '"${v.trim()}" exists.';
+                        return '"${v.trim()}" zaten mevcut.';
                       }
                       return null;
                     },
@@ -870,9 +957,15 @@ class _SubCategorySelectionStep extends ConsumerWidget {
             actions: <Widget>[
               TextButton(
                 onPressed: loading ? null : () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
+                child: const Text('İptal'),
               ),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0)),
+                ),
                 onPressed: loading || !can
                     ? null
                     : () async {
@@ -881,7 +974,9 @@ class _SubCategorySelectionStep extends ConsumerWidget {
                         final newName = ctrl.text.trim();
                         final updated = [
                           ...target!.subcategories,
-                          if (!target.subcategories.map((s) => s.toLowerCase()).contains(newName.toLowerCase()))
+                          if (!target.subcategories
+                              .map((s) => s.toLowerCase())
+                              .contains(newName.toLowerCase()))
                             newName
                         ];
                         final updatedModel = UserCategoryModel(
@@ -899,25 +994,36 @@ class _SubCategorySelectionStep extends ConsumerWidget {
                           final provider = transactionType == 'income'
                               ? incomeCustomCategoriesProvider
                               : expenseCustomCategoriesProvider;
-                          await ref.read(provider.notifier).updateCustomCategory(updatedModel);
+                          await ref
+                              .read(provider.notifier)
+                              .updateCustomCategory(updatedModel);
                           ref.invalidate(allCustomCategoriesProvider);
+
+                          // DÜZELTME: `await` sonrası context kullanımı öncesi kontrol
+                          if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Subcategory "$newName" added!'),
-                              backgroundColor: Colors.green,
-                            ),
+                                content:
+                                    Text('Alt kategori "$newName" eklendi!'),
+                                backgroundColor: Colors.green),
                           );
                           onSubCategorySelected(newName);
-                          Navigator.of(ctx).pop();
+
+                          // DÜZELTME: `await` sonrası context kullanımı öncesi kontrol
+                          if (!dCtx.mounted) return;
+                          Navigator.of(dCtx).pop();
                         } catch (e) {
+                          // DÜZELTME: `await` sonrası context kullanımı öncesi kontrol
+                          if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Failed: ${e.toString()}'),
-                              backgroundColor: Colors.red,
-                            ),
+                                content: Text('Başarısız: ${e.toString()}'),
+                                backgroundColor: Colors.red),
                           );
                         } finally {
-                          setState(() => loading = false);
+                          if (dCtx.mounted) {
+                            setState(() => loading = false);
+                          }
                         }
                       },
                 child: loading
@@ -925,11 +1031,8 @@ class _SubCategorySelectionStep extends ConsumerWidget {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Add'),
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Ekle'),
               ),
             ],
           );
@@ -965,15 +1068,6 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
   bool? _isNeed;
   String? _selectedEmotion;
   String? _selectedAccount;
-
-  final List<String> _emotionList = <String>[
-    'Happy',
-    'Neutral',
-    'Stressed',
-    'Guilty',
-    'Excited',
-    'Sad',
-  ];
 
   @override
   void initState() {
@@ -1023,8 +1117,15 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final txType = ref.watch(transactionFormNotifierProvider.select((d) => d.type));
+    const primaryColor = Color(0xFF00796B);
+    final inputDecoration = InputDecoration(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: primaryColor, width: 2)));
+
+    final txType =
+        ref.watch(transactionFormNotifierProvider.select((d) => d.type));
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -1033,35 +1134,40 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
         child: ListView(
           children: <Widget>[
             Text(
-              'Enter Transaction Details',
+              'İşlem Detaylarını Girin',
               textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall?.copyWith(fontSize: 20),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(fontSize: 20),
             ),
             const SizedBox(height: 24),
 
             // Amount
             TextFormField(
               controller: _amountController,
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: inputDecoration.copyWith(labelText: 'Tutar'),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Enter amount';
+                if (v == null || v.trim().isEmpty) return 'Tutar girin';
                 final a = double.tryParse(v.replaceAll(',', '.').trim());
-                if (a == null || a <= 0) return 'Valid positive amount';
+                if (a == null || a <= 0)
+                  return 'Geçerli pozitif bir tutar girin';
                 return null;
               },
               onChanged: (v) {
                 final parsed = double.tryParse(v.replaceAll(',', '.').trim());
-                debugPrint('[AMOUNT] onChanged → $parsed');
-                ref.read(transactionFormNotifierProvider.notifier).updateAmount(parsed);
+                ref
+                    .read(transactionFormNotifierProvider.notifier)
+                    .updateAmount(parsed);
               },
               onSaved: (v) {
-                final parsed = double.tryParse(v?.replaceAll(',', '.').trim() ?? '');
-                debugPrint('[AMOUNT] onSaved → $parsed');
-                ref.read(transactionFormNotifierProvider.notifier).updateAmount(parsed);
+                final parsed =
+                    double.tryParse(v?.replaceAll(',', '.').trim() ?? '');
+                ref
+                    .read(transactionFormNotifierProvider.notifier)
+                    .updateAmount(parsed);
               },
             ),
             const SizedBox(height: 16),
@@ -1069,9 +1175,8 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
             // Date
             TextFormField(
               controller: _dateController,
-              decoration: InputDecoration(
-                labelText: 'Date',
-                border: const OutlineInputBorder(),
+              decoration: inputDecoration.copyWith(
+                labelText: 'Tarih',
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.calendar_today),
                   onPressed: _pickDate,
@@ -1079,7 +1184,7 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
               ),
               readOnly: true,
               onTap: _pickDate,
-              validator: (v) => (v == null || v.isEmpty) ? 'Select date' : null,
+              validator: (v) => (v == null || v.isEmpty) ? 'Tarih seçin' : null,
             ),
             const SizedBox(height: 16),
 
@@ -1089,41 +1194,45 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
               return accountsVal.when(
                 data: (accounts) {
                   if (_selectedAccount != null &&
-                      !accounts.any((a) => a.accountName == _selectedAccount)) {
+                      !accounts.any((a) => a.id == _selectedAccount)) {
                     _selectedAccount = null;
                   }
                   return DropdownButtonFormField<String>(
                     value: _selectedAccount,
-                    decoration: const InputDecoration(
-                      labelText: 'Account',
-                      border: OutlineInputBorder(),
-                    ),
-                    hint: const Text('Select an account'),
+                    decoration: inputDecoration.copyWith(labelText: 'Hesap'),
+                    hint: const Text('Bir hesap seçin'),
                     isExpanded: true,
                     items: accounts.map((a) {
                       return DropdownMenuItem<String>(
-                        value: a.accountName,
+                        value: a.id,
                         child: Text('${a.accountName} (${a.currency})'),
                       );
                     }).toList(),
                     onChanged: (v) => setState(() => _selectedAccount = v),
-                    onSaved: (v) => ref.read(transactionFormNotifierProvider.notifier).updateAccount(v),
-                    validator: (v) => (v == null) ? 'Please select an account' : null,
+                    onSaved: (v) => ref
+                        .read(transactionFormNotifierProvider.notifier)
+                        .updateAccount(v),
+                    validator: (v) =>
+                        (v == null) ? 'Lütfen bir hesap seçin' : null,
                   );
                 },
                 loading: () => const Padding(
                   padding: EdgeInsets.all(8.0),
-                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  child:
+                      Center(child: CircularProgressIndicator(strokeWidth: 2)),
                 ),
                 error: (e, _) => TextFormField(
                   initialValue: widget.initialFormData.account,
-                  decoration: const InputDecoration(
-                    labelText: 'Account (Error Loading)',
-                    border: OutlineInputBorder(),
-                    errorText: 'Could not load accounts',
+                  decoration: inputDecoration.copyWith(
+                    labelText: 'Hesap (Yükleme Hatası)',
+                    errorText: 'Hesaplar yüklenemedi',
                   ),
-                  onSaved: (v) => ref.read(transactionFormNotifierProvider.notifier).updateAccount(v),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Please enter an account' : null,
+                  onSaved: (v) => ref
+                      .read(transactionFormNotifierProvider.notifier)
+                      .updateAccount(v),
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Lütfen bir hesap girin'
+                      : null,
                 ),
               );
             }),
@@ -1132,25 +1241,30 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
             // Description
             TextFormField(
               controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description (Optional)',
-                border: OutlineInputBorder(),
-              ),
+              decoration: inputDecoration.copyWith(
+                  labelText: 'Açıklama (İsteğe Bağlı)'),
               maxLines: 2,
-              onSaved: (v) => ref.read(transactionFormNotifierProvider.notifier).updateDescription(v?.trim()),
+              onSaved: (v) => ref
+                  .read(transactionFormNotifierProvider.notifier)
+                  .updateDescription(v?.trim()),
             ),
             const SizedBox(height: 16),
 
             // Recurring
             SwitchListTile(
-              title: const Text('Repeated Entry?'),
+              title: const Text('Tekrarlanan Girdi mi?'),
               value: _isRecurring,
+              activeColor: primaryColor,
               onChanged: (v) {
                 setState(() => _isRecurring = v);
-                ref.read(transactionFormNotifierProvider.notifier).updateIsRecurring(v);
+                ref
+                    .read(transactionFormNotifierProvider.notifier)
+                    .updateIsRecurring(v);
                 if (!v) {
                   _recurrenceController.clear();
-                  ref.read(transactionFormNotifierProvider.notifier).updateRecurrenceRule(null);
+                  ref
+                      .read(transactionFormNotifierProvider.notifier)
+                      .updateRecurrenceRule(null);
                 }
               },
             ),
@@ -1158,27 +1272,28 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _recurrenceController,
-                decoration: const InputDecoration(
-                  labelText: 'Recurrence Rule (Optional)',
-                  hintText: 'e.g., FREQ=MONTHLY',
-                  border: OutlineInputBorder(),
+                decoration: inputDecoration.copyWith(
+                  labelText: 'Tekrarlama Kuralı (İsteğe Bağlı)',
+                  hintText: 'Örn: FREQ=MONTHLY',
                 ),
-                onSaved: (v) => ref.read(transactionFormNotifierProvider.notifier).updateRecurrenceRule(v?.trim()),
+                onSaved: (v) => ref
+                    .read(transactionFormNotifierProvider.notifier)
+                    .updateRecurrenceRule(v?.trim()),
               ),
               const SizedBox(height: 16),
             ],
 
             // Income specifics
             if (txType == 'income') ...<Widget>[
-              Text('Income Specifics', style: theme.textTheme.titleMedium),
+              Text('Gelire Özgü Detaylar',
+                  style: Theme.of(context).textTheme.titleMedium),
               const Divider(),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _incomePctController,
-                decoration: const InputDecoration(
-                  labelText: 'Allocate to Savings (%)',
+                decoration: inputDecoration.copyWith(
+                  labelText: 'Birikime Ayrılacak (%)',
                   hintText: '0-100',
-                  border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
@@ -1188,11 +1303,16 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
                 validator: (v) {
                   if (v != null && v.isNotEmpty) {
                     final val = int.tryParse(v);
-                    if (val == null || val < 0 || val > 100) return 'Must be 0-100';
+                    // DÜZELTME: Tek satırlık if, süslü parantez içine alındı
+                    if (val == null || val < 0 || val > 100) {
+                      return '0-100 arasında olmalı';
+                    }
                   }
                   return null;
                 },
-                onSaved: (v) => ref.read(transactionFormNotifierProvider.notifier).updateIncomeAllocationPct(
+                onSaved: (v) => ref
+                    .read(transactionFormNotifierProvider.notifier)
+                    .updateIncomeAllocationPct(
                       v != null && v.isNotEmpty ? int.parse(v) : 0,
                     ),
               ),
@@ -1201,47 +1321,53 @@ class _DetailsEntryStepState extends ConsumerState<_DetailsEntryStep> {
 
             // Expense specifics
             if (txType == 'expense') ...<Widget>[
-              Text('Expense Specifics', style: theme.textTheme.titleMedium),
+              Text('Gidere Özgü Detaylar',
+                  style: Theme.of(context).textTheme.titleMedium),
               const Divider(),
               const SizedBox(height: 8),
-              const Text('Is this a "Want" or a "Need"?'),
+              const Text('Bu bir "İstek" mi, "İhtiyaç" mı?'),
               const SizedBox(height: 4),
               Row(
                 children: <Widget>[
                   FilterChip(
-                    label: const Text('Want'),
-                    selected: _isNeed == false,
-                    onSelected: (sel) {
-                      setState(() => _isNeed = sel ? false : null);
-                      ref.read(transactionFormNotifierProvider.notifier).updateIsNeed(sel ? false : null);
-                    },
-                  ),
+                      label: const Text('İstek'),
+                      selectedColor: const Color(0xFFE0F2F1), // tinted
+                      selected: _isNeed == false,
+                      onSelected: (sel) {
+                        setState(() => _isNeed = sel ? false : null);
+                        ref
+                            .read(transactionFormNotifierProvider.notifier)
+                            .updateIsNeed(sel ? false : null);
+                      }),
                   const SizedBox(width: 8),
                   FilterChip(
-                    label: const Text('Need'),
-                    selected: _isNeed == true,
-                    onSelected: (sel) {
-                      setState(() => _isNeed = sel ? true : null);
-                      ref.read(transactionFormNotifierProvider.notifier).updateIsNeed(sel ? true : null);
-                    },
-                  ),
+                      label: const Text('İhtiyaç'),
+                      selectedColor: const Color(0xFFE0F2F1), // tinted
+                      selected: _isNeed == true,
+                      onSelected: (sel) {
+                        setState(() => _isNeed = sel ? true : null);
+                        ref
+                            .read(transactionFormNotifierProvider.notifier)
+                            .updateIsNeed(sel ? true : null);
+                      }),
                 ],
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: _selectedEmotion,
-                decoration: const InputDecoration(
-                  labelText: 'How did you feel after this expense?',
-                  border: OutlineInputBorder(),
+                decoration: inputDecoration.copyWith(
+                  labelText: 'Bu harcamadan sonra nasıl hissettiniz?',
                 ),
-                items: _emotionList
+                items: kEmotionList
                     .map((e) => DropdownMenuItem<String>(
                           value: e,
                           child: Text(e),
                         ))
                     .toList(),
                 onChanged: (v) => setState(() => _selectedEmotion = v),
-                onSaved: (v) => ref.read(transactionFormNotifierProvider.notifier).updateEmotion(v),
+                onSaved: (v) => ref
+                    .read(transactionFormNotifierProvider.notifier)
+                    .updateEmotion(v),
               ),
               const SizedBox(height: 16),
             ],
@@ -1277,7 +1403,7 @@ class _TypeButton extends StatelessWidget {
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         foregroundColor: Colors.white,
-        backgroundColor: isSelected ? color : color.withOpacity(0.7),
+        backgroundColor: isSelected ? color : Colors.grey.shade500,
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: isSelected ? 4 : 2,

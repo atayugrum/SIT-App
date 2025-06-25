@@ -27,7 +27,8 @@ class UserCategoryModel {
   static DateTime _parseDate(dynamic dateInput) {
     if (dateInput == null) return DateTime.now();
     if (dateInput is Timestamp) return dateInput.toDate();
-    if (dateInput is String) return DateTime.tryParse(dateInput) ?? DateTime.now();
+    if (dateInput is String)
+      return DateTime.tryParse(dateInput) ?? DateTime.now();
     return DateTime.now();
   }
 
@@ -51,7 +52,8 @@ class UserCategoryModel {
     // Used when sending data to the backend (e.g., for creation/update)
     return {
       // 'id': id, // Not sent for creation, backend generates
-      'userId': userId, // Usually set by backend from auth context, but good for client model
+      'userId':
+          userId, // Usually set by backend from auth context, but good for client model
       'categoryName': categoryName,
       'categoryType': categoryType,
       if (iconId != null) 'iconId': iconId,

@@ -1,22 +1,22 @@
-// File: flutter_app/lib/src/presentation/screens/auth/login_screen.dart
+// File: lib/src/presentation/screens/auth/login_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
-import '../../providers/auth_providers.dart'; // Import our auth providers
-import 'package:firebase_auth/firebase_auth.dart'; // For FirebaseAuthException
-import 'registration_screen.dart'; // Add this import
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/auth_providers.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'registration_screen.dart';
 
-class LoginScreen extends ConsumerStatefulWidget { // Changed to ConsumerStatefulWidget
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState(); // Changed to ConsumerState
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> { // Changed to ConsumerState
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  bool _isLoading = false; // To show loading indicator on button
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -27,56 +27,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> { // Changed to Consu
 
   Future<void> _loginUser() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true; // Start loading
-      });
+      setState(() => _isLoading = true);
       try {
-        final email = _emailController.text.trim();
-        final password = _passwordController.text;
-
-        // Use the authServiceProvider to sign in
         await ref.read(authServiceProvider).signInWithEmailAndPassword(
-              email: email,
-              password: password,
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
             );
-        // Navigation to HomeScreen is handled by AuthWrapper automatically if login is successful
-        // If successful, authStateChangesProvider will update and AuthWrapper will navigate.
-        if (mounted) { // Check if the widget is still in the tree
-            ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Login Successful! Redirecting...')),
-            );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Giriş Başarılı! Yönlendiriliyorsunuz...')),
+          );
         }
-
       } on FirebaseAuthException catch (e) {
-        String errorMessage = 'Login failed. Please try again.';
-        if (e.code == 'user-not-found') {
-          errorMessage = 'No user found for that email.';
+        String errorMessage = 'Giriş başarısız. Lütfen tekrar deneyin.';
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+          errorMessage = 'Geçersiz e-posta veya şifre.';
         } else if (e.code == 'wrong-password') {
-          errorMessage = 'Wrong password provided for that user.';
+          errorMessage = 'Yanlış şifre girdiniz.';
         } else if (e.code == 'invalid-email') {
-          errorMessage = 'The email address is not valid.';
-        } else if (e.code == 'invalid-credential') {
-            errorMessage = 'Invalid credentials. Please check your email and password.';
+          errorMessage = 'E-posta adresi geçerli değil.';
         }
-        // It's good practice to check for specific error codes
-        print('FirebaseAuthException code: ${e.code}');
 
         if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(errorMessage), backgroundColor: Colors.redAccent),
-            );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(errorMessage), backgroundColor: Colors.redAccent),
+          );
         }
       } catch (e) {
-         if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('An unexpected error occurred: $e'), backgroundColor: Colors.redAccent),
-            );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Beklenmedik bir hata oluştu: $e'),
+                backgroundColor: Colors.redAccent),
+          );
         }
       } finally {
         if (mounted) {
-            setState(() {
-                _isLoading = false; // Stop loading
-            });
+          setState(() => _isLoading = false);
         }
       }
     }
@@ -84,9 +73,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> { // Changed to Consu
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Colors.teal.shade700;
+    final inputDecoration = InputDecoration(
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: primaryColor, width: 2)),
+    );
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SIT App Login'),
+        title: const Text('SIT App Giriş'),
         centerTitle: true,
       ),
       body: Center(
@@ -98,30 +95,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> { // Changed to Consu
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Icon(
-                  Icons.wallet_outlined,
-                  size: 80,
-                  color: Theme.of(context).primaryColor,
-                ),
+                Icon(Icons.wallet_outlined, size: 80, color: primaryColor),
                 const SizedBox(height: 32),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'you@example.com',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12.0)),
-                    ),
+                  decoration: inputDecoration.copyWith(
+                    labelText: 'E-posta',
+                    hintText: 'ornek@eposta.com',
+                    prefixIcon: const Icon(Icons.email_outlined),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@') || !value.contains('.')) {
-                      return 'Please enter a valid email';
-                    }
+                    if (value == null || value.isEmpty)
+                      return 'Lütfen e-posta adresinizi girin';
+                    if (!value.contains('@') || !value.contains('.'))
+                      return 'Lütfen geçerli bir e-posta adresi girin';
                     return null;
                   },
                 ),
@@ -129,50 +117,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> { // Changed to Consu
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    hintText: 'Your secure password',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12.0)),
-                    ),
+                  decoration: inputDecoration.copyWith(
+                    labelText: 'Şifre',
+                    hintText: 'Güvenli şifreniz',
+                    prefixIcon: const Icon(Icons.lock_outline),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
+                    if (value == null || value.isEmpty)
+                      return 'Lütfen şifrenizi girin';
+                    if (value.length < 6)
+                      return 'Şifre en az 6 karakter olmalıdır';
                     return null;
                   },
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
                     shape: RoundedRectangleBorder(
-                       borderRadius: BorderRadius.circular(12.0),
-                    ),
+                        borderRadius: BorderRadius.circular(12.0)),
                   ),
-                  onPressed: _isLoading ? null : _loginUser, // Disable button while loading
+                  onPressed: _isLoading ? null : _loginUser,
                   child: _isLoading
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Login', style: TextStyle(fontSize: 16)),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Giriş Yap', style: TextStyle(fontSize: 16)),
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () {
-                    // Navigate to RegisterScreen
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const RegistrationScreen()),
-                    );
-                  },
-                  child: const Text("Don't have an account? Sign Up"),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (context) => const RegistrationScreen())),
+                  child: const Text("Hesabınız yok mu? Kaydolun"),
                 ),
               ],
             ),

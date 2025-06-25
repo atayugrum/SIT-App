@@ -5,6 +5,8 @@ import traceback
 
 user_bp = Blueprint('user_bp', __name__, url_prefix='/api/users')
 
+# --- MEVCUT ROTALARINIZ (DEĞİŞİKLİK YOK) ---
+
 @user_bp.route('/create_profile', methods=['POST'])
 def create_profile():
     data = request.get_json()
@@ -22,7 +24,7 @@ def create_profile():
         return jsonify(result), 201
     except Exception as e:
         print(f"Unhandled exception in /create_profile for UID {uid if 'uid' in data else 'UNKNOWN'}: {e}")
-        traceback.print_exc() 
+        traceback.print_exc()
         return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
 
 @user_bp.route('/<string:uid>/profile', methods=['GET'])
@@ -34,14 +36,13 @@ def get_profile(uid):
         if result.get("success"):
             return jsonify(result["profile"]), 200
         else:
-            status_code = result.get("status_code", 500) 
+            status_code = result.get("status_code", 500)
             return jsonify({"success": False, "error": result.get("error", "An unknown error occurred")}), status_code
     except Exception as e:
         print(f"Unhandled exception in /profile for UID {uid}: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
 
-# NEW ROUTE TO UPDATE USER PROFILE
 @user_bp.route('/<string:uid>/profile', methods=['PUT'])
 def update_profile(uid):
     data = request.get_json()
@@ -53,11 +54,39 @@ def update_profile(uid):
         result = UserService.update_user_profile(uid, data)
 
         if result.get("success"):
-            return jsonify(result), 200 # Return updated profile and message
+            return jsonify(result), 200
         else:
-            status_code = result.get("status_code", 400) # Default to 400 for bad update data
+            status_code = result.get("status_code", 400)
             return jsonify({"success": False, "error": result.get("error", "Failed to update profile")}), status_code
     except Exception as e:
         print(f"Unhandled exception in update /profile for UID {uid}: {e}")
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
+
+# --- YENİ EKLENEN ROTA (KULLANICI SİLME İÇİN) ---
+
+@user_bp.route('/<string:uid>', methods=['DELETE'])
+def delete_user(uid):
+    """
+    Kullanıcıyı ve ilişkili TÜM verilerini kalıcı olarak siler.
+    GÜVENLİK NOTU: Bu endpoint'i canlıya almadan önce, isteği yapan kişinin
+    kimlik token'ı ile bu `uid`'nin aynı kişiye ait olduğunu doğrulayan bir
+    güvenlik katmanı (authentication middleware) eklemeniz çok önemlidir.
+    Bu, bir kullanıcının başka bir kullanıcıyı silmesini engeller.
+    """
+    try:
+        print(f"DELETE /api/users/{uid} route hit for permanent deletion.")
+        # user_service içine eklediğimiz yeni, kapsamlı silme fonksiyonunu çağırıyoruz.
+        result = UserService.delete_user_and_all_data(uid)
+        
+        if result.get("success"):
+            return jsonify(result), 200
+        else:
+            # Hata durumu servisten geleceği için direkt onu döndürüyoruz.
+            return jsonify({"success": False, "error": result.get("error", "Deletion failed")}), 500
+            
+    except Exception as e:
+        # Servis katmanında bir hata oluşursa burası çalışır.
+        print(f"Unhandled exception in DELETE user for UID {uid}: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Internal server error during deletion: {str(e)}"}), 500

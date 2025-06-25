@@ -2,3 +2,8 @@ Flask
 firebase-admin
 Flask-CORS
 python-dotenv
+google-cloud-firestore
+yfinance
+pandas
+google-generativeai>=0.4.0
+gunicorn

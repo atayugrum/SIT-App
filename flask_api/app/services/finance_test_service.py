@@ -7,7 +7,7 @@ class FinanceTestService:
     @staticmethod
     def start_test(user_id):
         try:
-            test_ref = db.collection('Users').document(user_id).collection('FinanceTests').document()
+            test_ref = db.collection('users').document(user_id).collection('FinanceTests').document()
             test_data = {'userId': user_id, 'startedAt': datetime.now(timezone.utc).isoformat(), 'completedAt': None}
             test_ref.set(test_data)
             return {"success": True, "testId": test_ref.id}, 200
@@ -29,7 +29,7 @@ class FinanceTestService:
     @staticmethod
     def submit_answers(user_id, test_id, answers, is_complete):
         try:
-            test_ref = db.collection('Users').document(user_id).collection('FinanceTests').document(test_id)
+            test_ref = db.collection('users').document(user_id).collection('FinanceTests').document(test_id)
             batch = db.batch()
             for answer in answers:
                 answer_ref = test_ref.collection('answers').document(answer['itemId'])
@@ -55,7 +55,7 @@ class FinanceTestService:
     @staticmethod
     def get_test_results(user_id, test_id):
         try:
-            test_ref = db.collection('Users').document(user_id).collection('FinanceTests').document(test_id)
+            test_ref = db.collection('users').document(user_id).collection('FinanceTests').document(test_id)
             doc = test_ref.get()
             if doc.exists:
                 return {"success": True, "results": doc.to_dict()}, 200
@@ -70,7 +70,7 @@ class FinanceTestService:
         try:
             items_docs = db.collection('FinanceTestItems').stream()
             items_map = {doc.id: doc.to_dict() for doc in items_docs}
-            answers_ref = db.collection('Users').document(user_id).collection('FinanceTests').document(test_id).collection('answers')
+            answers_ref = db.collection('users').document(user_id).collection('FinanceTests').document(test_id).collection('answers')
             answers_docs = answers_ref.stream()
             answers_map = {doc.id: doc.to_dict() for doc in answers_docs}
             
@@ -115,10 +115,10 @@ class FinanceTestService:
             if rt_score <= 40: risk_profile = 'low'
             elif rt_score >= 70: risk_profile = 'high'
             
-            test_ref = db.collection('Users').document(user_id).collection('FinanceTests').document(test_id)
+            test_ref = db.collection('users').document(user_id).collection('FinanceTests').document(test_id)
             test_ref.update(normalized_scores)
             
-            user_ref = db.collection('Users').document(user_id)
+            user_ref = db.collection('users').document(user_id)
             user_ref.set({'riskProfile': risk_profile}, merge=True)
             
             print(f"Scores calculated and saved for test {test_id}. Risk profile set to: {risk_profile}")
