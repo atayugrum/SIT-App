@@ -294,3 +294,7 @@ Thumbs.db
 # Geçici Dosyalar
 *.zip
 *.log
+
+# Python cache dosyalarını ve klasörlerini yoksay
+__pycache__/
+*.pyc

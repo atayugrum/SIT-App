@@ -16,7 +16,4 @@ COPY . .
 EXPOSE 10000
 
 # Uygulamayı başlatacak olan komut
-# Not: 'main:app' kısmını, ana python dosyanızın adı 'main.py' 
-# ve içindeki Flask nesnenizin adı 'app' ise bu şekilde bırakın.
-# Eğer dosyanızın adı 'app.py' ise 'app:app' olarak değiştirin.
 CMD ["gunicorn", "--workers", "2", "--bind", "0.0.0.0:10000", "run:app"]
