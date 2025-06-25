@@ -31,8 +31,8 @@ Kullanıcı verilerinin güvenliği bizim için en yüksek önceliktir. Verileri
 
 ### Hesap ve Verilerin Silinmesi
 
-Hesabınızı ve onunla ilişkili tüm verileri kalıcı olarak silme hakkına sahipsiniz. Bu işlemi nasıl yapacağınızı anlatan talimatlara [buradan](YAPIŞTIRILACAK_DATA_DELETION_LİNKİ) ulaşabilirsiniz.
+Hesabınızı ve onunla ilişkili tüm verileri kalıcı olarak silme hakkına sahipsiniz. Bu işlemi nasıl yapacağınızı anlatan talimatlara [buradan]([YAPIŞTIRILACAK_DATA_DELETION_LİNKİ](https://github.com/atayugrum/SIT-App/blob/main/DATA_DELETION.md)) ulaşabilirsiniz.
 
 ### İletişim
 
-Gizlilik politikamızla ilgili sorularınız için lütfen [destek-eposta-adresiniz@ornek.com] adresi üzerinden bizimle iletişime geçin.
+Gizlilik politikamızla ilgili sorularınız için lütfen [atayugrum2001@gmail.com] adresi üzerinden bizimle iletişime geçin.
