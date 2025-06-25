@@ -463,17 +463,42 @@ class InvestmentService:
             elif market == 'us_stocks':
                  asset_list = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA"]
 
+            if not asset_list:
+                return {"success": True, "opportunities": []}, 200
+
+            # --- OPTİMİZASYON BURADA BAŞLIYOR ---
+            # Tüm hisseleri tek bir istekte, boşlukla ayırarak indir
+            all_symbols_str = " ".join(asset_list)
+            df_all = yf.download(all_symbols_str, period="1y", interval="1d", progress=False, timeout=30)
+            
+            if df_all.empty:
+                return {"success": False, "error": "Toplu veri çekme işlemi başarısız oldu."}, 500
+            # --- OPTİMİZASYON BİTTİ ---
+
             assets_for_ai = []
             for symbol in asset_list:
-                df = yf.download(symbol, period="1y", interval="1d", progress=False, timeout=100)
-                if not df.empty:
-                    # Fırsatlar için her zaman nötr bir risk profiliyle temel analiz yapılır, kişiselleştirme yorumda olur.
-                    analysis_data = TechnicalAnalysisService.get_full_analysis(df, symbol, risk_profile="medium")
-                    if analysis_data and 'analysis' in analysis_data and horizon in analysis_data['analysis']:
-                       assets_for_ai.append({
-                           "symbol": symbol,
-                           "indicators": analysis_data['analysis'][horizon]['indicators']
-                       })
+                try:
+                    # İndirilen toplu veriden (DataFrame) bu sembole ait olan sütunları seç
+                    # Eğer tek hisse indirildiyse DataFrame yapısı farklı olur, bunu kontrol et
+                    if len(asset_list) > 1:
+                        # Sadece bu sembole ait olan veriyi al
+                        df_symbol = df_all.loc[:, (slice(None), symbol)]
+                        # Çok katmanlı sütunları tek katmana indir
+                        df_symbol.columns = df_symbol.columns.droplevel(1)
+                    else:
+                        df_symbol = df_all # Tek hisse varsa DataFrame zaten doğru formatta
+
+                    if not df_symbol.dropna().empty:
+                        # Analizi her bir hissenin kendi verisiyle yap
+                        analysis_data = TechnicalAnalysisService.get_full_analysis(df_symbol, symbol, risk_profile="medium")
+                        if analysis_data and 'analysis' in analysis_data and horizon in analysis_data['analysis']:
+                           assets_for_ai.append({
+                               "symbol": symbol,
+                               "indicators": analysis_data['analysis'][horizon]['indicators']
+                           })
+                except (KeyError, IndexError) as e:
+                    print(f"'{symbol}' için veri işlenirken hata oluştu (muhtemelen veri eksik): {e}")
+                    continue # Bu hisseyi atla ve devam et
             
             user_profile_response = UserService.get_user_profile(user_id)
             if not user_profile_response.get("success"):
