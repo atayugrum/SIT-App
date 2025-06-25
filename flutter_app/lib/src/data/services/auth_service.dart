@@ -8,7 +8,7 @@ import 'dart:convert';
 
 class AuthService {
   final FirebaseAuth _firebaseAuth;
-  static const String _flaskApiBaseUrl = 'http://10.0.2.2:5000';
+  static const String _flaskApiBaseUrl = 'https://sit-app-backend.onrender.com';
   final _logger = Logger(
     printer: PrettyPrinter(methodCount: 1, errorMethodCount: 5),
   );
