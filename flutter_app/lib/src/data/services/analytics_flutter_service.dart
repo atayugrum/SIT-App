@@ -10,7 +10,7 @@ import '../../presentation/providers/auth_providers.dart';
 
 class AnalyticsFlutterService {
   final Ref _ref;
-  static const String _baseUrl = 'https://sit-app-backend.onrender.com';
+  static const String _baseUrl = 'https://sit-app-production.up.railway.app';
   final _logger = Logger();
 
   AnalyticsFlutterService(this._ref);

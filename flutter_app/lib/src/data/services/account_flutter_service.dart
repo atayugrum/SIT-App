@@ -9,7 +9,7 @@ import '../models/account_model.dart';
 import '../../presentation/providers/auth_providers.dart';
 
 class AccountFlutterService {
-  static const String _baseUrl = 'https://sit-app-backend.onrender.com';
+  static const String _baseUrl = 'https://sit-app-production.up.railway.app';
   final Ref _ref;
   final _logger = Logger();
 

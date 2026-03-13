@@ -9,7 +9,7 @@ import '../../presentation/providers/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class CategoryFlutterService {
-  static const String _flaskApiBaseUrl = 'https://sit-app-backend.onrender.com';
+  static const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
   final Ref _ref;
   final _logger = Logger(printer: PrettyPrinter(methodCount: 1, errorMethodCount: 5));
 

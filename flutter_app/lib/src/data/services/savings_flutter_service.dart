@@ -12,7 +12,7 @@ import '../models/savings_balance_model.dart';
 import '../models/savings_goal_model.dart';
 
 class SavingsFlutterService {
-  static const String _flaskApiBaseUrl = 'https://sit-app-backend.onrender.com';
+  static const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
   final Ref _ref;
   final _logger = Logger();
 

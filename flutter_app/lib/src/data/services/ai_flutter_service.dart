@@ -8,7 +8,7 @@ import '../models/budget_suggestion_model.dart';
 import '../models/parsed_transaction_model.dart';
 
 class AIFlutterService {
-  static const String _baseUrl = 'https://sit-app-backend.onrender.com';
+  static const String _baseUrl = 'https://sit-app-production.up.railway.app';
   final _logger = Logger();
 
   Future<BudgetSuggestion> getBudgetRecommendation(String userId, String category) async {

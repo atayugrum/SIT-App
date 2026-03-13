@@ -6,7 +6,7 @@ import 'package:logger/logger.dart';
 import '../models/user_profile_model.dart';
 
 class ProfileService {
-  static const String _flaskApiBaseUrl = 'https://sit-app-backend.onrender.com';
+  static const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
   final _logger = Logger();
 
   Future<UserProfile> getUserProfile(String uid) async {

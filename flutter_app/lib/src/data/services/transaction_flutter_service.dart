@@ -7,7 +7,7 @@ import 'package:logger/logger.dart';
 import '../models/transaction_model.dart';
 
 
-const String _flaskApiBaseUrl = 'https://sit-app-backend.onrender.com';
+const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
 
 class TransactionFlutterService {
   final String? _userId; // Bu userId'nin hala bir şekilde sağlanması gerekiyor.
