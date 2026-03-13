@@ -12,8 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Tüm proje kodunu (/app klasörünün içine) kopyala
 COPY . .
 
-# Render'ın uygulamanıza ulaşabilmesi için 10000 portunu aç
-EXPOSE 10000
+# Railway sets PORT dynamically; expose it at runtime
+EXPOSE ${PORT:-10000}
 
-# Uygulamayı başlatacak olan komut
-CMD ["gunicorn", "--workers", "2", "--bind", "0.0.0.0:10000", "run:app"]
+# Use shell form so $PORT is evaluated at runtime
+CMD gunicorn --workers 2 --bind 0.0.0.0:${PORT:-10000} run:app
