@@ -27,7 +27,7 @@ class BudgetFlutterService {
     _logger.i("Listing budgets from: $uri");
 
     try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+      final response = await http.get(uri).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true && data['budgets'] != null) {
@@ -38,7 +38,7 @@ class BudgetFlutterService {
           throw Exception(data['error'] ?? 'Bütçeler alınamadı.');
         }
       } else {
-        _logger.e("Error listing budgets - ${response.statusCode}", error: jsonDecode(response.body));
+        _logger.e("Error listing budgets - ${response.statusCode}", error: response.body);
         throw Exception('Bütçeler alınamadı: Hata ${response.statusCode}');
       }
     } on SocketException catch (e, s) {
@@ -64,7 +64,7 @@ class BudgetFlutterService {
             uri,
             headers: {'Content-Type': 'application/json'},
             body: json.encode(budget.toMap()),
-          ).timeout(const Duration(seconds: 15));
+          ).timeout(const Duration(seconds: 60));
 
       final responseData = json.decode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -98,9 +98,10 @@ class BudgetFlutterService {
     _logger.i("Deleting budget: $budgetId");
 
     try {
-      final response = await http.delete(uri).timeout(const Duration(seconds: 15));
+      final response = await http.delete(uri).timeout(const Duration(seconds: 60));
       if (response.statusCode != 200) {
-        final error = json.decode(response.body)['error'];
+        String error = "HTTP ${response.statusCode}";
+        try { error = json.decode(response.body)["error"] ?? error; } catch (_) {}
         _logger.e("Error deleting budget - ${response.statusCode}", error: error);
         throw Exception('Bütçe silinemedi: $error');
       }

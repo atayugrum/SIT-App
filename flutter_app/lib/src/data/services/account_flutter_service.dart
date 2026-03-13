@@ -34,7 +34,7 @@ class AccountFlutterService {
     _logger.i("Listing accounts from: $url");
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List<dynamic> accountList = data['accounts'];
@@ -67,7 +67,7 @@ class AccountFlutterService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(accountData),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 201) {
         final data = jsonDecode(response.body);
@@ -97,7 +97,7 @@ class AccountFlutterService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(accountData),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 60));
       if (response.statusCode != 200) {
         _handleError(response, 'update account');
       }
@@ -118,7 +118,7 @@ class AccountFlutterService {
     final url = Uri.parse('$_baseUrl/api/accounts/$accountId');
     _logger.i("Archiving account at: $url");
     try {
-      final response = await http.delete(url).timeout(const Duration(seconds: 15));
+      final response = await http.delete(url).timeout(const Duration(seconds: 60));
       if (response.statusCode != 200) {
         _handleError(response, 'archive account');
       }

@@ -16,9 +16,15 @@ class TransactionFlutterService {
   TransactionFlutterService(this._userId);
 
   void _handleError(http.Response response, String context) {
-      final error = jsonDecode(response.body)['error'];
-      _logger.e("Error in $context - ${response.statusCode}", error: error);
-      throw Exception('$context başarısız: $error');
+    String errorMessage = 'HTTP ${response.statusCode}';
+    try {
+      final decoded = jsonDecode(response.body);
+      errorMessage = decoded['error'] ?? errorMessage;
+    } catch (_) {
+      // response body is not JSON (e.g. HTML error page)
+    }
+    _logger.e("Error in $context - ${response.statusCode}", error: errorMessage);
+    throw Exception('$context başarısız: $errorMessage');
   }
 
   Future<void> createTransfer(Map<String, dynamic> transferData) async {
@@ -33,7 +39,7 @@ class TransactionFlutterService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(transferData),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 60));
 
       if (response.statusCode != 201) {
         _handleError(response, "transfer işlemi");
@@ -62,10 +68,10 @@ class TransactionFlutterService {
     _logger.i("Listing transactions from $url");
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
-      final responseData = json.decode(response.body);
-      
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
+
       if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
         if (responseData['success'] == true && responseData['transactions'] != null) {
           final List<dynamic> transactionsJson = responseData['transactions'];
           return transactionsJson.map((json) => TransactionModel.fromMap(json as Map<String, dynamic>)).toList();
@@ -104,7 +110,7 @@ class TransactionFlutterService {
           // Authorization başlığı kaldırıldı.
         },
         body: json.encode(transaction.toMap()),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 60));
 
       // Sunucu yanıtını kontrol etme kısmı aynı kaldı, çünkü bu hala çok önemli.
       if (response.statusCode == 201) {
@@ -113,7 +119,8 @@ class TransactionFlutterService {
         return TransactionModel.fromMap(responseData['transaction']);
       } else {
         // Hata durumunda, çökme yerine Exception fırlat.
-        final errorData = json.decode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = json.decode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e("Failed to create transaction - ${response.statusCode}", error: errorData);
         throw Exception('İşlem oluşturulamadı: ${errorData['error'] ?? 'Bilinmeyen bir sunucu hatası.'}');
       }
@@ -141,7 +148,7 @@ class TransactionFlutterService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode(transaction.toMapForUpdate())
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 60));
 
       final responseData = json.decode(response.body);
       if (response.statusCode == 200) {
@@ -174,7 +181,7 @@ class TransactionFlutterService {
     _logger.i("Deleting transaction $id");
 
     try {
-      final response = await http.delete(url).timeout(const Duration(seconds: 15));
+      final response = await http.delete(url).timeout(const Duration(seconds: 60));
       final responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {

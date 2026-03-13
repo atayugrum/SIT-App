@@ -22,7 +22,8 @@ class SavingsFlutterService {
 
   void _handleErrorResponse(http.Response response, String context) {
     try {
-      final errorData = jsonDecode(response.body);
+      Map<String, dynamic> errorData = {};
+        try { errorData = jsonDecode(response.body); } catch (_) { errorData = {"error": response.body}; }
       _logger.e("Error in $context - ${response.statusCode}", error: response.body);
       throw Exception('Failed to $context: ${errorData['error'] ?? response.reasonPhrase}');
     } catch(e) {
@@ -39,7 +40,7 @@ class SavingsFlutterService {
     final url = Uri.parse('$_flaskApiBaseUrl/api/savings/balance').replace(queryParameters: {'userId': _userId});
     _logger.i("Fetching savings balance from $url");
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true) {
@@ -77,7 +78,7 @@ class SavingsFlutterService {
     _logger.i("Listing savings allocations from: $url");
     
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         if (responseData['success'] == true && responseData.containsKey('allocations')) {
@@ -113,7 +114,7 @@ class SavingsFlutterService {
     _logger.i("Adding manual saving...");
 
     try {
-      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload)).timeout(const Duration(seconds: 10));
+      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload)).timeout(const Duration(seconds: 60));
       if (response.statusCode != 201) {
         _handleErrorResponse(response, 'add manual saving');
       }
@@ -133,7 +134,7 @@ class SavingsFlutterService {
     final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals').replace(queryParameters: {'userId': _userId});
     _logger.i("Listing savings goals from $url");
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -166,7 +167,7 @@ class SavingsFlutterService {
     
     _logger.i("Creating new savings goal...");
     try {
-      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: payload).timeout(const Duration(seconds: 10));
+      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: payload).timeout(const Duration(seconds: 60));
       if (response.statusCode == 201) {
         final data = jsonDecode(response.body);
         return SavingsGoalModel.fromMap(data['goal']);
@@ -189,7 +190,7 @@ class SavingsFlutterService {
     _logger.i("Deleting savings goal $goalId");
     
     try {
-      final response = await http.delete(url).timeout(const Duration(seconds: 10));
+      final response = await http.delete(url).timeout(const Duration(seconds: 60));
       if (response.statusCode != 200) {
         _handleErrorResponse(response, 'delete goal');
       }
@@ -209,7 +210,7 @@ class SavingsFlutterService {
     _logger.i("Allocating $amount to goal $goalId");
 
     try {
-      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: payload).timeout(const Duration(seconds: 10));
+      final response = await http.post(url, headers: {'Content-Type': 'application/json'}, body: payload).timeout(const Duration(seconds: 60));
       if (response.statusCode != 200) {
         _handleErrorResponse(response, 'allocate funds to goal');
       }

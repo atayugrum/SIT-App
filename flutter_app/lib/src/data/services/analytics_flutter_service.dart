@@ -17,69 +17,73 @@ class AnalyticsFlutterService {
 
   String? get _userId => _ref.read(userIdProvider);
 
-  Future<DashboardInsightsModel> getDashboardInsights() async {
+  /// Fetches both historical analytics and AI projections in a single request.
+  Future<({DashboardInsightsModel historical, AIProjectionsModel aiProjections})>
+      getV2Analytics() async {
     if (_userId == null) throw Exception("User not logged in");
 
-    final url = Uri.parse('$_baseUrl/api/analytics/dashboard?userId=$_userId');
-    _logger.i("Getting dashboard insights...");
+    final url = Uri.parse('$_baseUrl/api/analytics/v2/dashboard?userId=$_userId');
+    _logger.i("Getting v2 analytics...");
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 20));
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true && data['dashboard'] != null) {
-          _logger.d("Dashboard data received: ${data['dashboard']}");
-          return DashboardInsightsModel.fromMap(data['dashboard']);
+        if (data['success'] == true && data['data'] != null) {
+          final historical = DashboardInsightsModel.fromMap(
+              data['data']['historical'] as Map<String, dynamic>? ?? {});
+          final aiProjections = AIProjectionsModel.fromMap(
+              data['data']['aiProjections'] as Map<String, dynamic>? ?? {});
+          return (historical: historical, aiProjections: aiProjections);
         } else {
-          _logger.w("Failed to get dashboard insights, success=false", error: data['error']);
-          throw Exception(data['error'] ?? 'Failed to load dashboard insights');
+          throw Exception(data['error'] ?? 'Analitik veriler alınamadı');
         }
       } else {
-        _logger.e("Error getting dashboard - ${response.statusCode}", error: jsonDecode(response.body));
-        throw Exception('Failed to load dashboard insights with status code: ${response.statusCode}');
+        _logger.e("Error getting v2 analytics - ${response.statusCode}", error: response.body);
+        throw Exception('Analitik veriler alınamadı: Hata Kodu ${response.statusCode}');
       }
     } on SocketException catch (e, s) {
-      _logger.e('Network Error on getDashboardInsights', error: e, stackTrace: s);
+      _logger.e('Network Error on getV2Analytics', error: e, stackTrace: s);
       throw Exception('Lütfen internet bağlantınızı kontrol edin.');
     } on TimeoutException catch (e, s) {
-      _logger.e('Timeout on getDashboardInsights', error: e, stackTrace: s);
+      _logger.e('Timeout on getV2Analytics', error: e, stackTrace: s);
       throw Exception('Sunucuya bağlanılamadı. Lütfen daha sonra tekrar deneyin.');
     } catch (e, s) {
-      _logger.e('Generic Error on getDashboardInsights', error: e, stackTrace: s);
-      throw Exception('Genel bakış verileri alınırken bir hata oluştu.');
+      _logger.e('Generic Error on getV2Analytics', error: e, stackTrace: s);
+      throw Exception('Analitik veriler alınırken bir hata oluştu.');
     }
   }
 
-  Future<AIProjectionsModel> getAIProjections() async {
+  Future<CategoryComparisonModel> getCategoryComparison(String category) async {
     if (_userId == null) throw Exception("User not logged in");
-    
-    final url = Uri.parse('$_baseUrl/api/analytics/projections?userId=$_userId');
-    _logger.i("Getting AI projections...");
-    
+
+    final url = Uri.parse(
+        '$_baseUrl/api/analytics/category-comparison?userId=$_userId&category=${Uri.encodeComponent(category)}');
+    _logger.i("Getting category comparison for $category...");
+
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 45));
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['success'] == true && data['projections'] != null) {
-          return AIProjectionsModel.fromMap(data['projections']);
+        if (data['success'] == true && data['data'] != null) {
+          return CategoryComparisonModel.fromMap(data['data']);
         } else {
-          _logger.w("Failed to get AI projections, success=false", error: data['error']);
-          throw Exception(data['error'] ?? 'AI analizi alınamadı.');
+          throw Exception(data['error'] ?? 'Kategori karşılaştırması alınamadı');
         }
       } else {
-        _logger.e("Error getting AI projections - ${response.statusCode}", error: jsonDecode(response.body));
-        throw Exception('AI analizi alınamadı: Hata Kodu ${response.statusCode}');
+        _logger.e("Error getting category comparison - ${response.statusCode}", error: response.body);
+        throw Exception('Kategori karşılaştırması alınamadı: Hata Kodu ${response.statusCode}');
       }
     } on SocketException catch (e, s) {
-      _logger.e('Network Error on getAIProjections', error: e, stackTrace: s);
+      _logger.e('Network Error on getCategoryComparison', error: e, stackTrace: s);
       throw Exception('Lütfen internet bağlantınızı kontrol edin.');
     } on TimeoutException catch (e, s) {
-      _logger.e('Timeout on getAIProjections', error: e, stackTrace: s);
-      throw Exception('AI analiz servisine bağlanılamadı, lütfen tekrar deneyin.');
+      _logger.e('Timeout on getCategoryComparison', error: e, stackTrace: s);
+      throw Exception('Sunucuya bağlanılamadı.');
     } catch (e, s) {
-      _logger.e('Generic Error on getAIProjections', error: e, stackTrace: s);
-      throw Exception('AI analizi alınırken bir hata oluştu.');
+      _logger.e('Generic Error on getCategoryComparison', error: e, stackTrace: s);
+      throw Exception('Kategori karşılaştırması alınırken bir hata oluştu.');
     }
   }
 }

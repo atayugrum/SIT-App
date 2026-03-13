@@ -17,11 +17,12 @@ class AIFlutterService {
     _logger.i("Getting budget recommendation for category: $category");
 
     try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 30));
+      final response = await http.get(uri).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         return BudgetSuggestion.fromJson(json.decode(response.body));
       } else {
-        final errorData = json.decode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = json.decode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e("Error getting budget recommendation - ${response.statusCode}", error: errorData);
         throw Exception(errorData['error'] ?? 'Bütçe önerisi alınamadı.');
       }
@@ -47,7 +48,7 @@ class AIFlutterService {
             url,
             headers: {'Content-Type': 'application/json'},
             body: payload,
-          ).timeout(const Duration(seconds: 25));
+          ).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -60,7 +61,8 @@ class AIFlutterService {
           throw Exception(data['error'] ?? 'Metin ayrıştırılamadı.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = jsonDecode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e("Error parsing text - ${response.statusCode}", error: errorData);
         throw Exception('Metin ayrıştırma hatası: ${errorData['error'] ?? response.reasonPhrase}');
       }

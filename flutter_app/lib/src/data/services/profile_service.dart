@@ -21,7 +21,7 @@ class ProfileService {
 
     _logger.i("Fetching profile from: $url");
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
       _logger.d("Response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
@@ -71,7 +71,7 @@ class ProfileService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(updates),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 60));
 
       _logger.d("Update response status: ${response.statusCode}");
 
@@ -89,7 +89,8 @@ class ProfileService {
               'Profil güncellenemedi, sunucu yanıtı hatalı.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = jsonDecode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e(
             "Error updating profile for UID $uid - ${response.statusCode}",
             error: response.body);
@@ -128,7 +129,7 @@ class ProfileService {
           // NOT: Eğer API'niz token bazlı koruma gerektiriyorsa,
           // 'Authorization': 'Bearer <token>' header'ını burada eklemelisiniz.
         },
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 60));
 
       _logger.d("Delete response status: ${response.statusCode}");
 
@@ -142,7 +143,8 @@ class ProfileService {
           throw Exception(responseData['error'] ?? 'Hesap silinemedi, sunucu hatası.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = jsonDecode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e(
             "Error deleting account for UID $uid - ${response.statusCode}",
             error: response.body);

@@ -78,7 +78,7 @@ class AuthService {
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(profileData),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 60));
       
       _logger.i("Flask API response status: ${response.statusCode}");
       _logger.d("Flask API response body: ${response.body}");

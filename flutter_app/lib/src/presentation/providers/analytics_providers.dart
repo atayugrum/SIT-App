@@ -2,45 +2,42 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/analytics_models.dart';
 import '../../data/services/analytics_flutter_service.dart';
+import 'analytics_v2_providers.dart';
 
 // Ana Servis
 final analyticsServiceProvider = Provider<AnalyticsFlutterService>((ref) {
   return AnalyticsFlutterService(ref);
 });
 
-// Tüm dashboard verisini tek seferde çeken ana FutureProvider
+// Derived providers that delegate to the unified v2 provider
+
 final dashboardInsightsProvider =
-    FutureProvider.autoDispose<DashboardInsightsModel>((ref) {
-  return ref.watch(analyticsServiceProvider).getDashboardInsights();
+    Provider.autoDispose<AsyncValue<DashboardInsightsModel>>((ref) {
+  return ref.watch(analyticsV2Provider).whenData((v) => v.historical);
 });
 
-// === Diğer Provider'lar Ana Provider'dan Veri Alır ===
-
-// Gelir/Gider özetini ana veriden seçerek sunar
 final incomeExpenseSummaryProvider =
     Provider.autoDispose<AsyncValue<IncomeExpenseSummary>>((ref) {
   return ref
-      .watch(dashboardInsightsProvider)
-      .whenData((insights) => insights.incomeExpenseSummary);
+      .watch(analyticsV2Provider)
+      .whenData((v) => v.historical.incomeExpenseSummary);
 });
 
-// İstek/İhtiyaç özetini ana veriden seçerek sunar
 final needsVsWantsProvider =
     Provider.autoDispose<AsyncValue<NeedsVsWantsModel>>((ref) {
   return ref
-      .watch(dashboardInsightsProvider)
-      .whenData((insights) => insights.needsVsWantsSummary);
+      .watch(analyticsV2Provider)
+      .whenData((v) => v.historical.needsVsWantsSummary);
 });
 
-// Duygu özetini ana veriden seçerek sunar
 final emotionSummaryProvider =
     Provider.autoDispose<AsyncValue<List<EmotionSpendingItem>>>((ref) {
   return ref
-      .watch(dashboardInsightsProvider)
-      .whenData((insights) => insights.emotionSummary);
+      .watch(analyticsV2Provider)
+      .whenData((v) => v.historical.emotionSummary);
 });
 
 final aiProjectionsProvider =
-    FutureProvider.autoDispose<AIProjectionsModel>((ref) {
-  return ref.watch(analyticsServiceProvider).getAIProjections();
+    Provider.autoDispose<AsyncValue<AIProjectionsModel>>((ref) {
+  return ref.watch(analyticsV2Provider).whenData((v) => v.aiProjections);
 });

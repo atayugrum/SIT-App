@@ -4,7 +4,8 @@ import os
 import json
 import traceback
 from datetime import datetime, timezone, timedelta
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 from app.utils.firebase_config import db
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -142,24 +143,20 @@ CATEGORY_STRUCTURE = {
 
 
 class AIService:
-    llm_model = None
-    generation_config = {}
+    client = None
+    DEFAULT_CONFIG = None
+    MODEL_NAME = 'gemini-1.5-flash'
     try:
         GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
         if not GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY ortam değişkeni bulunamadı.")
 
-        genai.configure(api_key=GEMINI_API_KEY)
+        client = genai.Client(api_key=GEMINI_API_KEY)
 
-        generation_config = genai.types.GenerationConfig(
+        DEFAULT_CONFIG = types.GenerateContentConfig(
             max_output_tokens=2048,
             response_mime_type="application/json",
             temperature=0.5
-        )
-
-        llm_model = genai.GenerativeModel(
-            'gemini-1.5-flash',
-            generation_config=generation_config
         )
         print("AI_SERVICE: Google Gemini API başarıyla yapılandırıldı.")
 
@@ -170,7 +167,7 @@ class AIService:
     
     @staticmethod
     def get_budget_recommendation(user_id: str, category: str):
-        if not AIService.llm_model: return {"success": False, "error": "AI Service not available"}, 503
+        if not AIService.client: return {"success": False, "error": "AI Service not available"}, 503
         try:
             transactions_ref = db.collection('transactions')
 
@@ -236,7 +233,7 @@ class AIService:
             }}
             """
             
-            response = AIService.llm_model.generate_content(prompt, request_options={'timeout': AIService.GENERATION_TIMEOUT})
+            response = AIService.client.models.generate_content(model=AIService.MODEL_NAME, contents=prompt, config=AIService.DEFAULT_CONFIG)
             clean_response_text = re.sub(r'```json\s*|\s*```', '', response.text.strip())
             data = json.loads(clean_response_text)
             return data
@@ -246,7 +243,7 @@ class AIService:
 
     @staticmethod
     def get_financial_forecast_and_recommendations(user_financial_data: dict, risk_profile: str):
-        if not AIService.llm_model: raise Exception("AI model is not available.")
+        if not AIService.client: raise Exception("AI model is not available.")
         income_summary = user_financial_data.get('incomeExpenseSummary', {})
         needs_wants_summary = user_financial_data.get('needsVsWantsSummary', {})
         category_summary = user_financial_data.get('categorySummary', [])
@@ -257,9 +254,9 @@ class AIService:
         income_change_str = f"{income_change:.1f}%" if income_change is not None else "Değişim Yok"
         expense_change_str = f"{expense_change:.1f}%" if expense_change is not None else "Değişim Yok"
         
-        varied_config = genai.types.GenerationConfig(
-            max_output_tokens=AIService.generation_config.max_output_tokens,
-            response_mime_type=AIService.generation_config.response_mime_type,
+        varied_config = types.GenerateContentConfig(
+            max_output_tokens=2048,
+            response_mime_type="application/json",
             temperature=0.7
         )
 
@@ -306,7 +303,7 @@ class AIService:
         """
         try:
             print("AI_SERVICE: Gelişmiş finansal tahmin ve tavsiye için LLM çağrısı yapılıyor...")
-            response = AIService.llm_model.generate_content(prompt, generation_config=varied_config, request_options={'timeout': 45})
+            response = AIService.client.models.generate_content(model=AIService.MODEL_NAME, contents=prompt, config=varied_config)
             clean_response_text = re.sub(r'```json\s*|\s*```', '', response.text.strip())
             data = json.loads(clean_response_text)
             
@@ -323,22 +320,20 @@ class AIService:
     @staticmethod
     def generate_dynamic_analysis_comment(indicators: dict, horizon: str, symbol: str, risk_profile: str):
         try:
-            model = AIService.llm_model
             prompt = f"""
             Sen bir finansal analistsin. Risk profili '{risk_profile}' olan bir kullanıcıya {symbol} adlı varlığın {horizon} teknik durumunu **Türkçe** olarak anlat. 
             Aşağıdaki verilere dayanarak, kullanıcının risk profiline uygun, kolay anlaşılır ve profesyonel bir analiz yorumu yaz. Yorumun tamamen Türkçe olsun.
             Veriler: {json.dumps(indicators)}
             """
-            response = model.generate_content(prompt, request_options={'timeout': AIService.GENERATION_TIMEOUT})
+            response = AIService.client.models.generate_content(model=AIService.MODEL_NAME, contents=prompt)
             return response.text.strip()
         except Exception as e:
             print(f"AI_SERVICE(generate_dynamic_analysis_comment) HATA: {e}")
             return "Kişiselleştirilmiş analiz yorumu üretilirken bir hata oluştu."
 
     @staticmethod
-    def get_indicator_explanation(indicator_key: str, current_value: float | None = None):
+    def get_indicator_explanation(indicator_key: str, current_value: "float | None" = None):
         try:
-            model = AIService.llm_model
             value_prompt_part = ""
             if current_value is not None:
                 value_prompt_part = f"Ayrıca, bu varlığın mevcut {indicator_key} değerinin {current_value:.2f} olduğunu göz önünde bulundurarak, bu spesifik değerin şu anki durum için ne anlama gelebileceğini Türkçe yorumla."
@@ -347,7 +342,7 @@ class AIService:
             {value_prompt_part}
             Cevabını kısa ve net tut.
             """
-            response = model.generate_content(prompt, request_options={'timeout': AIService.GENERATION_TIMEOUT})
+            response = AIService.client.models.generate_content(model=AIService.MODEL_NAME, contents=prompt)
             return response.text.strip()
         except Exception as e:
             print(f"AI_SERVICE(get_indicator_explanation) HATA: {e}")
@@ -356,7 +351,6 @@ class AIService:
     @staticmethod
     def find_opportunities_for_user(assets_data: list, user_profile: dict, horizon: str):
         try:
-            model = AIService.llm_model
             prompt = f"""
             Sen, kişiye özel yatırım danışmanlığı yapan bir yapay zeka asistanısın.
             KULLANICI PROFİLİ: {json.dumps(user_profile)}
@@ -366,7 +360,7 @@ class AIService:
             2. Seçtiğin her varlık için, 'reason' alanını Türkçe olacak şekilde şu formatta bir JSON objesi oluştur: {{"symbol": "VARLIK_SEMBOLÜ", "reason": "Neden uygun olduğuna dair kişisel ve Türkçe gerekçe.", "matchScore": "1-10 arası uygunluk puanı (integer)."}}
             3. Tüm sonuçları bir JSON dizisi içinde döndür.
             """
-            response = model.generate_content(prompt, request_options={'timeout': 100})
+            response = AIService.client.models.generate_content(model=AIService.MODEL_NAME, contents=prompt, config=AIService.DEFAULT_CONFIG)
             return json.loads(response.text)
         except Exception as e:
             print(f"AI_SERVICE(find_opportunities_for_user) HATA: {e}")
@@ -377,7 +371,7 @@ class AIService:
     def parse_transaction_text(text: str):
         if not text.strip():
             return {"success": True, "parsedTransactions": []}
-        if not AIService.llm_model:
+        if not AIService.client:
             return {"success": False, "error": "AI Service not available"}, 503
 
         try:
@@ -413,13 +407,13 @@ class AIService:
             "{text}"
             """
 
-            config = genai.types.GenerationConfig(
-                max_output_tokens=2048, 
-                response_mime_type="application/json", 
+            config = types.GenerateContentConfig(
+                max_output_tokens=2048,
+                response_mime_type="application/json",
                 temperature=0.1
             )
 
-            response = AIService.llm_model.generate_content(prompt, generation_config=config, request_options={'timeout': 40})
+            response = AIService.client.models.generate_content(model=AIService.MODEL_NAME, contents=prompt, config=config)
             parsed_data = json.loads(response.text)
 
             final_transactions = []

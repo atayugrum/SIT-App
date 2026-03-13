@@ -13,7 +13,7 @@ class TechnicalAnalysisService:
     # --- GÖSTERGE HESAPLAMA FONKSİYONLARI (DEĞİŞİKLİK YOK) ---
     
     @staticmethod
-    def calculate_rsi(price_series: pd.Series, period: int = 14) -> float | None:
+    def calculate_rsi(price_series: pd.Series, period: int = 14) -> "float | None":
         if price_series.empty or len(price_series) < period: return None
         delta = price_series.diff()
         gain = delta.where(delta > 0, 0).ewm(alpha=1/period, adjust=False).mean()
@@ -34,7 +34,7 @@ class TechnicalAnalysisService:
         return last_macd, last_signal
 
     @staticmethod
-    def calculate_ema(price_series: pd.Series, span: int) -> float | None:
+    def calculate_ema(price_series: pd.Series, span: int) -> "float | None":
         if price_series.empty or len(price_series) < span: return None
         ema = price_series.ewm(span=span, adjust=False).mean()
         return ema.iloc[-1] if not ema.empty else None

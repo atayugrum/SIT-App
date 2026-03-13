@@ -10,7 +10,7 @@ from .savings_service import SavingsService
 class BalanceService:
 
     @staticmethod
-    def _resolve_account_id(user_id: str, account_identifier: str) -> str | None:
+    def _resolve_account_id(user_id: str, account_identifier: str) -> "str | None":
         """
         Gelen tanımlayıcının ID mi yoksa İsim mi olduğunu anlar.
         Eğer bir isim ise, veritabanından sorgulayıp gerçek ID'yi bulur.

@@ -33,7 +33,7 @@ class CategoryFlutterService {
             url,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(categoryDataForApi),
-          ).timeout(const Duration(seconds: 10));
+          ).timeout(const Duration(seconds: 60));
 
       _logger.d("Create category response status: ${response.statusCode}");
 
@@ -47,7 +47,8 @@ class CategoryFlutterService {
           throw Exception(responseData['error'] ?? 'Failed to create category: Unexpected API response format.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = jsonDecode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e("Error creating category - ${response.statusCode}", error: response.body);
         throw Exception('Failed to create category: ${errorData['error'] ?? response.reasonPhrase}');
       }
@@ -78,7 +79,7 @@ class CategoryFlutterService {
     _logger.i("Listing categories from $url");
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
       _logger.d("List categories response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
@@ -93,7 +94,8 @@ class CategoryFlutterService {
           throw Exception(responseData['error'] ?? 'Failed to list categories: Unexpected API response format.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = jsonDecode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e("Error listing categories - ${response.statusCode}", error: response.body);
         throw Exception('Failed to list categories: ${errorData['error'] ?? response.reasonPhrase}');
       }
@@ -126,7 +128,7 @@ class CategoryFlutterService {
             url,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(categoryUpdateData),
-          ).timeout(const Duration(seconds: 10));
+          ).timeout(const Duration(seconds: 60));
 
       _logger.d("Update category response status: ${response.statusCode}");
 
@@ -140,7 +142,8 @@ class CategoryFlutterService {
           throw Exception(responseData['error'] ?? 'Failed to update category: Unexpected API response.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = jsonDecode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e("Error updating category - ${response.statusCode}", error: response.body);
         throw Exception('Failed to update category: ${errorData['error'] ?? response.reasonPhrase}');
       }
@@ -166,7 +169,7 @@ class CategoryFlutterService {
     _logger.i("Deleting category $categoryId at $url");
 
     try {
-      final response = await http.delete(url).timeout(const Duration(seconds: 10));
+      final response = await http.delete(url).timeout(const Duration(seconds: 60));
       _logger.d("Delete category response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
@@ -179,7 +182,8 @@ class CategoryFlutterService {
           throw Exception(responseData['error'] ?? 'Failed to delete category: Unexpected API response.');
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        Map<String, dynamic> errorData = {};
+        try { errorData = jsonDecode(response.body); } catch (_) { errorData = {"error": response.body}; }
         _logger.e("Error deleting category - ${response.statusCode}", error: response.body);
         throw Exception('Failed to delete category: ${errorData['error'] ?? response.reasonPhrase}');
       }
