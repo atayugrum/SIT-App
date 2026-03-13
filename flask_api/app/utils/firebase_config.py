@@ -14,15 +14,18 @@ def initialize_firebase_admin():
     try:
         # Eğer uygulama zaten başlatılmışsa tekrar başlatmayı deneme
         if not firebase_admin._apps:
-            # Render'da bu ortam değişkeni dolu olacak
-            if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
-                print("Firebase Admin SDK, Render ortam değişkeni ile başlatılıyor.")
-                firebase_admin.initialize_app()
-            
+            # Render'da JSON içeriği doğrudan env var olarak saklanır
+            if 'FIREBASE_CREDENTIALS_JSON' in os.environ:
+                import json
+                print("Firebase Admin SDK, FIREBASE_CREDENTIALS_JSON ortam değişkeni ile başlatılıyor.")
+                cred_dict = json.loads(os.environ['FIREBASE_CREDENTIALS_JSON'])
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+
             # Sizin bilgisayarınızda (lokalde) bu ortam değişkeni olmadığı için bu blok çalışacak.
             else:
                 print("Firebase Admin SDK, lokal anahtar dosyası ile başlatılıyor.")
-                anahtar_dosya_yolu = r"C:\Users\atayu\Downloads\sit-app-project-firebase-adminsdk-fbsvc-45bdd56ea3.json"
+                anahtar_dosya_yolu = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH', './serviceAccountKey.json')
                 cred = credentials.Certificate(anahtar_dosya_yolu)
                 firebase_admin.initialize_app(cred)
         
