@@ -1,9 +1,11 @@
 // File: lib/src/presentation/screens/settings/add_edit_category_form_screen.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_category_model.dart';
-import '../../providers/category_providers.dart';
 import '../../providers/auth_providers.dart';
+import '../../providers/category_providers.dart';
 
 class AddEditCategoryFormScreen extends ConsumerStatefulWidget {
   final UserCategoryModel? categoryToEdit;
@@ -16,45 +18,91 @@ class AddEditCategoryFormScreen extends ConsumerStatefulWidget {
 
 class _AddEditCategoryFormScreenState
     extends ConsumerState<AddEditCategoryFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  late TextEditingController _categoryNameController;
-  late TextEditingController _subcategoriesController;
-  late String _selectedCategoryType;
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _subcatsCtrl;
+  late String _categoryType;
   bool _isLoading = false;
+
   bool get _isEditMode => widget.categoryToEdit != null;
 
   @override
   void initState() {
     super.initState();
-    _categoryNameController =
-        TextEditingController(text: widget.categoryToEdit?.categoryName ?? '');
-    _selectedCategoryType = widget.categoryToEdit?.categoryType ?? 'expense';
-    _subcategoriesController = TextEditingController(
+    _nameCtrl = TextEditingController(
+        text: widget.categoryToEdit?.categoryName ?? '');
+    _categoryType = widget.categoryToEdit?.categoryType ?? 'expense';
+    _subcatsCtrl = TextEditingController(
         text: widget.categoryToEdit?.subcategories.join(', ') ?? '');
   }
 
   @override
   void dispose() {
-    _categoryNameController.dispose();
-    _subcategoriesController.dispose();
+    _nameCtrl.dispose();
+    _subcatsCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _saveCategory() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _showAlert(String msg) {
+    showCupertinoDialog(
+      context: context,
+      builder: (_) => CupertinoAlertDialog(
+        content: Text(msg),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
+    );
+  }
 
+  void _pickType() {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (_) => CupertinoActionSheet(
+        title: const Text('Kategori Tipi'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              setState(() => _categoryType = 'expense');
+              Navigator.of(context).pop();
+            },
+            child: const Text('Gider'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              setState(() => _categoryType = 'income');
+              Navigator.of(context).pop();
+            },
+            child: const Text('Gelir'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('İptal'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      _showAlert('Lütfen bir kategori adı girin.');
+      return;
+    }
     final currentUser = ref.read(currentUserProvider);
     if (currentUser == null) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("Oturum bulunamadı. Lütfen tekrar giriş yapın."),
-            backgroundColor: Colors.red));
+      _showAlert('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
       return;
     }
 
-    if (mounted) setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-    List<String> subcategoriesList = _subcategoriesController.text
+    final subcats = _subcatsCtrl.text
         .split(',')
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
@@ -63,122 +111,125 @@ class _AddEditCategoryFormScreenState
     final categoryData = UserCategoryModel(
       id: widget.categoryToEdit?.id,
       userId: currentUser.uid,
-      categoryName: _categoryNameController.text.trim(),
-      categoryType: _selectedCategoryType,
-      subcategories: subcategoriesList,
-      iconId: widget.categoryToEdit?.iconId ?? 'default_category_icon',
+      categoryName: name,
+      categoryType: _categoryType,
+      subcategories: subcats,
+      iconId:
+          widget.categoryToEdit?.iconId ?? 'default_category_icon',
       createdAt: widget.categoryToEdit?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
       isArchived: widget.categoryToEdit?.isArchived ?? false,
     );
 
     try {
-      final notifier = _selectedCategoryType == 'income'
+      final notifier = _categoryType == 'income'
           ? ref.read(incomeCustomCategoriesProvider.notifier)
           : ref.read(expenseCustomCategoriesProvider.notifier);
-
       if (_isEditMode) {
         await notifier.updateCustomCategory(categoryData);
       } else {
         await notifier.addCategory(categoryData);
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Kategori başarıyla kaydedildi!'),
-            backgroundColor: Colors.green));
-        Navigator.of(context).pop(true);
-      }
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content:
-                Text('Hata: ${e.toString().replaceFirst("Exception: ", "")}'),
-            backgroundColor: Colors.red));
+      if (mounted) {
+        _showAlert(
+            'Hata: ${e.toString().replaceFirst("Exception: ", "")}');
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  BoxDecoration get _fieldDecor => BoxDecoration(
+        color: AppColors.surfaceGlass,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.glassBorder),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.teal.shade700;
-    final inputDecoration = InputDecoration(
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: primaryColor, width: 2)),
-    );
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEditMode ? 'Kategoriyi Düzenle' : 'Yeni Kategori Ekle'),
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(
+            _isEditMode ? 'Kategoriyi Düzenle' : 'Yeni Kategori'),
+        backgroundColor: const Color(0xCC000000),
+        border: const Border(
+            bottom:
+                BorderSide(color: AppColors.separator, width: 0.5)),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              TextFormField(
-                controller: _categoryNameController,
-                decoration: inputDecoration.copyWith(
-                    labelText: 'Kategori Adı *',
-                    prefixIcon: const Icon(Icons.label_outline)),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Lütfen bir kategori adı girin'
-                    : null,
-              ),
-              const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                value: _selectedCategoryType,
-                decoration: inputDecoration.copyWith(
-                    labelText: 'Kategori Tipi *',
-                    prefixIcon: const Icon(Icons.filter_list)),
-                items: const [
-                  DropdownMenuItem(value: 'expense', child: Text('Gider')),
-                  DropdownMenuItem(value: 'income', child: Text('Gelir')),
-                ],
-                onChanged: (String? newValue) {
-                  if (newValue != null)
-                    setState(() => _selectedCategoryType = newValue);
-                },
-                validator: (value) =>
-                    value == null ? 'Lütfen bir tip seçin' : null,
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _subcategoriesController,
-                decoration: inputDecoration.copyWith(
-                  labelText: 'Alt Kategoriler (virgülle ayırın)',
-                  hintText: 'Örn: Kahve, Öğle Yemeği, Atıştırmalık',
-                  prefixIcon: const Icon(Icons.format_list_bulleted_outlined),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Text('Kategori Adı',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            CupertinoTextField(
+              controller: _nameCtrl,
+              placeholder: 'Örn: Eğlence',
+              placeholderStyle:
+                  const TextStyle(color: AppColors.textSecondary),
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: _fieldDecor,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+            ),
+            const SizedBox(height: 16),
+            const Text('Kategori Tipi',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: _pickType,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 12),
+                decoration: _fieldDecor,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _categoryType == 'income' ? 'Gelir' : 'Gider',
+                        style: const TextStyle(
+                            color: AppColors.textPrimary),
+                      ),
+                    ),
+                    const Icon(CupertinoIcons.chevron_right,
+                        color: AppColors.textSecondary, size: 16),
+                  ],
                 ),
               ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _saveCategory,
-                style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.0)),
-                    textStyle: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w500)),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : Text(_isEditMode
-                        ? 'Kategoriyi Güncelle'
-                        : 'Kategoriyi Kaydet'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Alt Kategoriler (virgülle ayırın)',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            CupertinoTextField(
+              controller: _subcatsCtrl,
+              placeholder: 'Örn: Kahve, Öğle Yemeği, Atıştırmalık',
+              placeholderStyle:
+                  const TextStyle(color: AppColors.textSecondary),
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: _fieldDecor,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+            ),
+            const SizedBox(height: 32),
+            CupertinoButton.filled(
+              borderRadius: BorderRadius.circular(12),
+              onPressed: _isLoading ? null : _save,
+              child: _isLoading
+                  ? const CupertinoActivityIndicator(
+                      color: CupertinoColors.white)
+                  : Text(_isEditMode
+                      ? 'Kategoriyi Güncelle'
+                      : 'Kategoriyi Kaydet'),
+            ),
+          ],
         ),
       ),
     );

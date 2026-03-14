@@ -1,7 +1,9 @@
 // File: flutter_app/lib/app_widget.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_localizations/flutter_localizations.dart'; // YENİ IMPORT
+
+import 'src/core/theme/app_theme.dart';
 import 'src/presentation/screens/auth/auth_wrapper.dart';
 
 class AppWidget extends StatelessWidget {
@@ -10,30 +12,24 @@ class AppWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ProviderScope(
-      child: MaterialApp(
+      child: const CupertinoApp(
         title: 'SIT App',
-        theme: ThemeData(
-          primarySwatch: Colors.teal,
-          useMaterial3: true,
-          brightness: Brightness.light,
-        ),
+        theme: AppTheme.cupertinoTheme,
         debugShowCheckedModeBanner: false,
 
-        // --- BU SATIRLARI EKLEYİN ---
-        locale: const Locale(
-            'tr', 'TR'), // Uygulamanın varsayılan dilini Türkçe yapar
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
+        // Türkçe yerelleştirme
+        locale: Locale('tr', 'TR'),
+        localizationsDelegates: [
+          GlobalMaterialLocalizations.delegate, // fl_chart için gereklidir
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        supportedLocales: const [
-          Locale('tr', 'TR'), // Türkçe desteği
-          Locale('en', 'US'), // İngilizce (opsiyonel ama iyi bir pratiktir)
+        supportedLocales: [
+          Locale('tr', 'TR'),
+          Locale('en', 'US'),
         ],
-        // --------------------------
 
-        home: const AuthWrapper(),
+        home: AuthWrapper(),
       ),
     );
   }

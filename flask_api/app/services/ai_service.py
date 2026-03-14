@@ -142,6 +142,68 @@ CATEGORY_STRUCTURE = {
 }
 
 
+class BudgetRuleEngine:
+    """50/30/20 bütçe kuralını uygulayan statik sınıf.
+    50% → İhtiyaçlar (Needs), 30% → İstekler (Wants), 20% → Tasarruf/Finansal Hedefler
+    """
+
+    NEEDS_CATEGORIES = {
+        'Ev & Faturalar', 'Market & Gıda', 'Ulaşım',
+        'Kişisel Bakım', 'Sağlık & Spor', 'Finansal Giderler'
+    }
+    WANTS_CATEGORIES = {
+        'Eğlence & Sosyal Yaşam', 'Giyim & Aksesuar', 'Diğer'
+    }
+
+    NEEDS_RATIO = 0.50
+    WANTS_RATIO = 0.30
+    SAVINGS_RATIO = 0.20
+
+    # İhtiyaçlar havuzunun kategori bazlı paylaşım oranları (toplamı ≈ 1.0)
+    NEEDS_CATEGORY_SHARES = {
+        'Ev & Faturalar': 0.40,
+        'Market & Gıda': 0.30,
+        'Ulaşım': 0.15,
+        'Kişisel Bakım': 0.05,
+        'Sağlık & Spor': 0.05,
+        'Finansal Giderler': 0.05,
+    }
+    # İstekler havuzunun kategori bazlı paylaşım oranları (toplamı ≈ 1.0)
+    WANTS_CATEGORY_SHARES = {
+        'Eğlence & Sosyal Yaşam': 0.40,
+        'Giyim & Aksesuar': 0.40,
+        'Diğer': 0.20,
+    }
+
+    @staticmethod
+    def get_bucket(category: str) -> str:
+        if category in BudgetRuleEngine.NEEDS_CATEGORIES:
+            return 'İhtiyaçlar (%50)'
+        if category in BudgetRuleEngine.WANTS_CATEGORIES:
+            return 'İstekler (%30)'
+        return 'Bilinmiyor'
+
+    @staticmethod
+    def compute_baseline(net_monthly_income: float, category: str) -> dict:
+        """50/30/20 kuralına göre verilen kategori için aylık bütçe tavanını hesaplar."""
+        bucket = BudgetRuleEngine.get_bucket(category)
+        if net_monthly_income <= 0 or bucket == 'Bilinmiyor':
+            return {"bucket": bucket, "rule_limit": None, "savings_target": None}
+
+        if category in BudgetRuleEngine.NEEDS_CATEGORIES:
+            total_pool = net_monthly_income * BudgetRuleEngine.NEEDS_RATIO
+            share = BudgetRuleEngine.NEEDS_CATEGORY_SHARES.get(category, 0.10)
+        else:
+            total_pool = net_monthly_income * BudgetRuleEngine.WANTS_RATIO
+            share = BudgetRuleEngine.WANTS_CATEGORY_SHARES.get(category, 0.33)
+
+        return {
+            "bucket": bucket,
+            "rule_limit": round(total_pool * share),
+            "savings_target": round(net_monthly_income * BudgetRuleEngine.SAVINGS_RATIO),
+        }
+
+
 class AIService:
     client = None
     DEFAULT_CONFIG = None
@@ -199,6 +261,33 @@ class AIService:
                 if emotion: emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
             
             tx_count, monthly_avg = len(docs), total_spending / 3
+
+            # --- 50/30/20 KURAL MOTORu: kullanıcının ortalama aylık gelirini çek ---
+            income_query = (
+                transactions_ref
+                .where(filter=FieldFilter("userId", "==", user_id))
+                .where(filter=FieldFilter("type", "==", "income"))
+                .where(filter=FieldFilter("isDeleted", "==", False))
+                .where(filter=FieldFilter("date", ">=", start_date.strftime('%Y-%m-%d')))
+                .where(filter=FieldFilter("date", "<=", end_date.strftime('%Y-%m-%d')))
+            )
+            income_docs = list(income_query.stream())
+            total_income_90d = sum(float(d.to_dict().get('amount', 0)) for d in income_docs)
+            monthly_income_avg = total_income_90d / 3
+
+            rule_baseline = BudgetRuleEngine.compute_baseline(monthly_income_avg, category)
+            rule_info = ""
+            if rule_baseline["rule_limit"] is not None:
+                rule_info = (
+                    f"\n50/30/20 KURAL BAZLI REFERANS (aylık net gelir: {monthly_income_avg:.0f} TL):\n"
+                    f"- Bu kategori '{rule_baseline['bucket']}' havuzuna girer.\n"
+                    f"- Kural önerisi: {rule_baseline['rule_limit']} TL/ay\n"
+                    f"- Önerilen aylık tasarruf hedefi: {rule_baseline['savings_target']} TL\n"
+                    "Bu kuralı bir tavan/referans olarak kullan; kullanıcının gerçek harcamasıyla "
+                    "karşılaştırarak kişiselleştirilmiş bir öneri üret."
+                )
+            # --- 50/30/20 KURAL MOTORU SONU ---
+
             benchmark_data_istanbul = COST_OF_LIVING_DATA.get("istanbul", {}).get(category)
             benchmark_data_tr = COST_OF_LIVING_DATA.get("turkey_genel", {}).get(category)
             benchmark_info = ""
@@ -213,7 +302,7 @@ class AIService:
             - Kullanıcının Aylık Ortalama Harcaması: {monthly_avg:.2f} TL
             - Harcama Tipi Dökümü: İhtiyaç: {needs_spending:.2f} TL, İstek: {wants_spending:.2f} TL
             - Harcama Anındaki Duygu Yoğunluğu: {json.dumps(emotion_counts, ensure_ascii=False)}
-
+            {rule_info}
             REFERANS VERİLER:
             {benchmark_info}
 
@@ -222,14 +311,16 @@ class AIService:
             1.  **Eğer kullanıcının aylık ortalaması, referans değerlerin (İstanbul veya Türkiye) belirgin şekilde ALTINDAYSA:** Bu durumu olumlu bir geri bildirim olarak belirt. Kullanıcıyı tebrik et ve mevcut harcama seviyesini koruması veya hafifçe artırması için bir bütçe öner. (Örn: ortalaması 150 TL ise, 150 TL veya 200 TL gibi). ASLA mevcut harcamasından daha düşük bir bütçe önerme.
             2.  **Eğer kullanıcının aylık ortalaması, referans değerlerin belirgin şekilde ÜZERİNDEYSE:** Bütçeyi referans değere yaklaştıracak mantıklı bir kesinti öner. Harcama 'İstek' odaklı ise veya 'Suçlu' gibi olumsuz duygular içeriyorsa bu kesinti daha cesur olabilir.
             3.  **Eğer kullanıcının harcaması referans değerlere YAKINSA:** Bu tutarlılığı öv ve bütçeyi bu seviyede tutmasını öner.
+            4.  **50/30/20 kural önerisini ikincil bir doğrulama referansı olarak kullan.** Eğer kullanıcının harcaması kural limitinin çok üzerindeyse bunu da gerekçede belirt.
 
             Önerdiğin bütçeyi en yakın anlamlı sayıya yuvarla (örn: 1845 -> 1850). Gerekçen net, ikna edici ve yaptığın analizi yansıtmalı.
-            
+
             Cevabını aşağıdaki JSON formatında ver:
             {{
               "suggestedBudget": <sayısal_bütçe_miktarı_integer>,
               "rationale": "<Bu bütçeyi neden önerdiğine dair, yukarıdaki senaryolara uygun, analitik ve kişiselleştirilmiş gerekçe>",
-              "transactionCount": {tx_count}
+              "transactionCount": {tx_count},
+              "ruleBasedLimit": {rule_baseline.get("rule_limit") or "null"}
             }}
             """
             

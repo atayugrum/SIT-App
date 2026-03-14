@@ -1,113 +1,142 @@
-// File: lib/src/presentation/widgets/transaction_card.dart
-import 'package:flutter/material.dart';
+// File: lib/src/presentation/screens/transactions/transaction_card.dart
+import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/categories.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/transaction_model.dart';
+import '../../widgets/glass_card.dart';
 
 class TransactionCard extends StatelessWidget {
   final TransactionModel transaction;
   final VoidCallback? onTap;
-  final List<PopupMenuEntry<String>>? menuItems;
+  /// Action sheet seçenekleri: (label, isDestructive, callback)
+  final List<({String label, bool isDestructive, VoidCallback action})>? actions;
 
   const TransactionCard({
     super.key,
     required this.transaction,
     this.onTap,
-    this.menuItems,
+    this.actions,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
-    final isIncome = transaction.type == 'income';
+    final fmt       = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+    final isIncome  = transaction.type == 'income';
+    final color     = isIncome ? AppColors.incomeGreen : AppColors.danger;
+    final iconMap   = isIncome ? incomeCategories : expenseCategories;
+    final icon      = iconMap[transaction.category] ?? CupertinoIcons.arrow_right_arrow_left_circle_fill;
+    final sign      = isIncome ? '+' : '-';
 
-    final Color amountColor =
-        isIncome ? Colors.green.shade700 : theme.colorScheme.error;
-    final Map<String, IconData> icons =
-        isIncome ? incomeCategories : expenseCategories;
-    IconData categoryIconData =
-        icons[transaction.category] ?? Icons.swap_horiz_outlined;
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      onTap: onTap ?? (actions != null ? () => _showActions(context) : null),
+      child: Row(
+        children: [
+          // ── Kategori ikonu ─────────────────────────────────────────────────
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.only(
-              left: 12.0, top: 12.0, bottom: 12.0, right: 0),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: amountColor.withOpacity(0.1),
-                child: Icon(categoryIconData, color: amountColor, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      transaction.category,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    if (transaction.subCategory != null &&
-                        transaction.subCategory!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2.0),
-                        child: Text(
-                          transaction.subCategory!,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: Colors.grey.shade700),
-                        ),
-                      ),
-                    if (transaction.description != null &&
-                        transaction.description!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        transaction.description!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ]
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    '${isIncome ? "+" : "-"} ${numberFormat.format(transaction.amount)}',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: amountColor,
-                      fontWeight: FontWeight.bold,
-                    ),
+          // ── Kategori & açıklama ────────────────────────────────────────────
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  transaction.category,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 4),
+                ),
+                if (transaction.subCategory != null &&
+                    transaction.subCategory!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
                   Text(
-                    DateFormat.yMd('tr_TR').format(transaction.date.toLocal()),
-                    style: theme.textTheme.bodySmall,
+                    transaction.subCategory!,
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ],
+                if (transaction.description != null &&
+                    transaction.description!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    transaction.description!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: AppColors.textTertiary, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // ── Tutar & tarih ──────────────────────────────────────────────────
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '$sign ${fmt.format(transaction.amount)}',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              if (menuItems != null && menuItems!.isNotEmpty)
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
-                  tooltip: "Seçenekler",
-                  itemBuilder: (BuildContext context) => menuItems!,
-                )
-              else
-                const SizedBox(width: 12),
+              const SizedBox(height: 4),
+              Text(
+                DateFormat.yMd('tr_TR').format(transaction.date.toLocal()),
+                style: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 12),
+              ),
             ],
           ),
+
+          if (actions != null && actions!.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => _showActions(context),
+              child: const Icon(CupertinoIcons.ellipsis,
+                  color: AppColors.textSecondary, size: 18),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showActions(BuildContext context) {
+    if (actions == null || actions!.isEmpty) return;
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) => CupertinoActionSheet(
+        actions: actions!
+            .map((a) => CupertinoActionSheetAction(
+                  isDestructiveAction: a.isDestructive,
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    a.action();
+                  },
+                  child: Text(a.label),
+                ))
+            .toList(),
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('İptal'),
         ),
       ),
     );

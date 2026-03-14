@@ -1,8 +1,8 @@
 // File: lib/src/presentation/screens/auth/auth_wrapper.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_providers.dart';
-import '../home/home_screen.dart'; // Yönlendirme buraya yapılacak
+import '../../navigation/main_tab_navigator.dart';
 import 'login_screen.dart';
 
 class AuthWrapper extends ConsumerWidget {
@@ -14,21 +14,18 @@ class AuthWrapper extends ConsumerWidget {
 
     return authState.when(
       data: (user) {
-        if (user != null) {
-          // Kullanıcı giriş yapmışsa, yeni HomeScreen'e git
-          return const HomeScreen();
-        }
-        // Kullanıcı giriş yapmamışsa LoginScreen'e git
+        if (user != null) return const MainTabNavigator();
         return const LoginScreen();
       },
-      loading: () => const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+      loading: () => const CupertinoPageScaffold(
+        child: Center(child: CupertinoActivityIndicator(radius: 16)),
       ),
-      error: (error, stack) => Scaffold(
-        body: Center(
-          child: Text('Something went wrong: $error'),
+      error: (error, stack) => CupertinoPageScaffold(
+        child: Center(
+          child: Text(
+            'Bir hata oluştu: $error',
+            style: const TextStyle(color: CupertinoColors.systemRed),
+          ),
         ),
       ),
     );

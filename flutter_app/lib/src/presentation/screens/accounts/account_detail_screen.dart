@@ -1,29 +1,27 @@
 // File: lib/src/presentation/screens/accounts/account_detail_screen.dart
-import 'package:flutter/material.dart';
-import '../../../data/models/transaction_model.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/account_model.dart';
-import '../../providers/transaction_providers.dart';
+import '../../../data/models/transaction_model.dart';
 import '../../providers/account_providers.dart';
+import '../../providers/transaction_providers.dart';
+import '../../widgets/glass_card.dart';
 import '../transactions/transaction_card.dart';
 import '../transactions/transaction_flow_screen.dart';
 
 class AccountDetailScreen extends ConsumerWidget {
   final AccountModel account;
-
   const AccountDetailScreen({super.key, required this.account});
 
-  void _navigateToEditTransaction(
-      BuildContext context, WidgetRef ref, TransactionModel transaction) {
+  void _navigateToEdit(
+      BuildContext context, WidgetRef ref, TransactionModel tx) {
     Navigator.of(context)
-        .push<bool>(
-      MaterialPageRoute(
-        builder: (context) =>
-            TransactionFlowScreen(transactionToEdit: transaction),
-      ),
-    )
+        .push<bool>(CupertinoPageRoute(
+          builder: (_) => TransactionFlowScreen(transactionToEdit: tx),
+        ))
         .then((updated) {
       if (updated == true && context.mounted) {
         ref.invalidate(accountTransactionsProvider(account.accountName));
@@ -32,150 +30,7 @@ class AccountDetailScreen extends ConsumerWidget {
     });
   }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final accountsState = ref.watch(accountsProvider);
-    AccountModel currentAccountDisplay = account;
-
-    if (accountsState is AsyncData<List<AccountModel>>) {
-      try {
-        currentAccountDisplay =
-            accountsState.value.firstWhere((acc) => acc.id == account.id);
-      } catch (e) {
-        print(
-            "Hesap Detay: Hesap ID ${account.id} bulunamadı, başlangıç verisi kullanılıyor.");
-      }
-    }
-
-    final transactionsAsyncValue = ref
-        .watch(accountTransactionsProvider(currentAccountDisplay.accountName));
-    final theme = Theme.of(context);
-    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
-    final primaryColor = Colors.teal.shade700;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(currentAccountDisplay.accountName),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: "Yenile",
-            onPressed: () {
-              ref.invalidate(accountTransactionsProvider(
-                  currentAccountDisplay.accountName));
-              ref.invalidate(accountsProvider);
-            },
-          ),
-        ],
-      ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                color: primaryColor.withOpacity(0.1),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _getAccountTypeDisplayName(
-                            currentAccountDisplay.accountType),
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(color: primaryColor),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Güncel Bakiye',
-                        style: theme.textTheme.bodyLarge
-                            ?.copyWith(color: Colors.grey.shade800),
-                      ),
-                      Text(
-                        numberFormat
-                            .format(currentAccountDisplay.currentBalance),
-                        style: theme.textTheme.displaySmall?.copyWith(
-                          color: currentAccountDisplay.currentBalance >= 0
-                              ? Colors.black87
-                              : theme.colorScheme.error,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-              child: Text("Son İşlemler",
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-            ),
-          ),
-          transactionsAsyncValue.when(
-            data: (transactions) {
-              if (transactions.isEmpty) {
-                return const SliverToBoxAdapter(
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                          vertical: 40.0, horizontal: 16.0),
-                      child: Text("Bu hesap için henüz işlem bulunmuyor.",
-                          textAlign: TextAlign.center),
-                    ),
-                  ),
-                );
-              }
-              return SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final tx = transactions[index];
-                    return TransactionCard(
-                      transaction: tx,
-                      onTap: () => _navigateToEditTransaction(context, ref, tx),
-                      menuItems: [
-                        PopupMenuItem<String>(
-                          value: 'edit',
-                          child: const ListTile(
-                              leading: Icon(Icons.edit_outlined),
-                              title: Text('Düzenle')),
-                          onTap: () =>
-                              _navigateToEditTransaction(context, ref, tx),
-                        ),
-                      ],
-                    );
-                  },
-                  childCount: transactions.length,
-                ),
-              );
-            },
-            loading: () => const SliverToBoxAdapter(
-                child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Center(child: CircularProgressIndicator()))),
-            error: (err, stack) => SliverToBoxAdapter(
-                child: Center(
-                    child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text('İşlemler yüklenirken hata oluştu: ${err.toString()}',
-                  style: TextStyle(color: theme.colorScheme.error)),
-            ))),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 80)),
-        ],
-      ),
-    );
-  }
-
-  String _getAccountTypeDisplayName(String type) {
+  String _accountTypeLabel(String type) {
     switch (type) {
       case 'bank':
         return 'Banka Hesabı';
@@ -190,5 +45,149 @@ class AccountDetailScreen extends ConsumerWidget {
       default:
         return 'Diğer Hesap';
     }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accountsState = ref.watch(accountsProvider);
+    AccountModel current = account;
+    if (accountsState is AsyncData<List<AccountModel>>) {
+      try {
+        current = accountsState.value.firstWhere((a) => a.id == account.id);
+      } catch (_) {}
+    }
+
+    final txAsync =
+        ref.watch(accountTransactionsProvider(current.accountName));
+    final fmt = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(current.accountName),
+        backgroundColor: const Color(0xCC000000),
+        border: const Border(
+            bottom: BorderSide(color: AppColors.separator, width: 0.5)),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {
+            ref.invalidate(
+                accountTransactionsProvider(current.accountName));
+            ref.invalidate(accountsProvider);
+          },
+          child: const Icon(CupertinoIcons.refresh,
+              color: AppColors.primaryBlue, size: 20),
+        ),
+      ),
+      child: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: GlassCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _accountTypeLabel(current.accountType),
+                        style: const TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text('Güncel Bakiye',
+                          style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13)),
+                      const SizedBox(height: 4),
+                      Text(
+                        fmt.format(current.currentBalance),
+                        style: TextStyle(
+                          color: current.currentBalance >= 0
+                              ? AppColors.incomeGreen
+                              : AppColors.danger,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding:
+                    EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Text('Son İşlemler',
+                    style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ),
+            txAsync.when(
+              data: (transactions) {
+                if (transactions.isEmpty) {
+                  return const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                          vertical: 40, horizontal: 16),
+                      child: Center(
+                        child: Text(
+                          'Bu hesap için henüz işlem bulunmuyor.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 15),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, i) {
+                      final tx = transactions[i];
+                      return TransactionCard(
+                        transaction: tx,
+                        onTap: () => _navigateToEdit(context, ref, tx),
+                        actions: [
+                          (
+                            label: 'Düzenle',
+                            isDestructive: false,
+                            action: () => _navigateToEdit(context, ref, tx),
+                          ),
+                        ],
+                      );
+                    },
+                    childCount: transactions.length,
+                  ),
+                );
+              },
+              loading: () => const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CupertinoActivityIndicator()),
+                ),
+              ),
+              error: (err, _) => SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'İşlemler yüklenirken hata oluştu: $err',
+                    style: const TextStyle(color: AppColors.danger),
+                  ),
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 80)),
+          ],
+        ),
+      ),
+    );
   }
 }

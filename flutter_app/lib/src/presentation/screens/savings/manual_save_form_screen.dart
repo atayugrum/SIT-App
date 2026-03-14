@@ -1,7 +1,10 @@
-// File: flutter_app/lib/src/presentation/screens/savings/manual_save_form_screen.dart
-import 'package:flutter/material.dart';
+// File: lib/src/presentation/screens/savings/manual_save_form_screen.dart
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../providers/savings_providers.dart';
 
 class ManualSaveFormScreen extends ConsumerStatefulWidget {
@@ -12,138 +15,187 @@ class ManualSaveFormScreen extends ConsumerStatefulWidget {
       _ManualSaveFormScreenState();
 }
 
-class _ManualSaveFormScreenState extends ConsumerState<ManualSaveFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
+class _ManualSaveFormScreenState
+    extends ConsumerState<ManualSaveFormScreen> {
+  final _amountCtrl = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  final _dateController = TextEditingController(
-      text: DateFormat('yyyy-MM-dd').format(DateTime.now()));
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _amountController.dispose();
-    _dateController.dispose();
+    _amountCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+  void _showAlert(String msg) {
+    showCupertinoDialog(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(), // Manual savings usually not for future
+      builder: (_) => CupertinoAlertDialog(
+        content: Text(msg),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-        _dateController.text = DateFormat('yyyy-MM-dd').format(picked);
-      });
-    }
   }
 
-  Future<void> _submitManualSave() async {
-    if (!_formKey.currentState!.validate()) {
+  void _pickDate() {
+    DateTime temp = _selectedDate;
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) => Container(
+        height: 320,
+        color: const Color(0xFF1C1C1E),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  child: const Text('İptal',
+                      style:
+                          TextStyle(color: AppColors.textSecondary)),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                const Text('Tarih Seç',
+                    style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600)),
+                CupertinoButton(
+                  child: const Text('Uygula',
+                      style:
+                          TextStyle(color: AppColors.primaryBlue)),
+                  onPressed: () {
+                    setState(() => _selectedDate = temp);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: _selectedDate,
+                maximumDate: DateTime.now(),
+                minimumDate: DateTime(2000),
+                onDateTimeChanged: (d) => temp = d,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    final amount = double.tryParse(
+        _amountCtrl.text.replaceAll(',', '.').trim());
+    if (amount == null || amount <= 0) {
+      _showAlert('Lütfen geçerli bir tutar girin.');
       return;
     }
     setState(() => _isLoading = true);
-
-    final amount = double.tryParse(_amountController.text.trim());
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please enter a valid positive amount.'),
-            backgroundColor: Colors.redAccent),
-      );
-      setState(() => _isLoading = false);
-      return;
-    }
-
     try {
-      await ref.read(savingsAllocationsProvider.notifier).addManualSaving(
-            amount: amount,
-            date: _selectedDate,
-          );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Manual saving added successfully!'),
-              backgroundColor: Colors.green),
-        );
-        Navigator.of(context).pop(true); // Indicate success
-      }
+      await ref
+          .read(savingsAllocationsProvider.notifier)
+          .addManualSaving(amount: amount, date: _selectedDate);
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  'Failed to add saving: ${e.toString().replaceFirst("Exception: ", "")}'),
-              backgroundColor: Colors.redAccent),
-        );
+        _showAlert(
+            'Hata: ${e.toString().replaceFirst("Exception: ", "")}');
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  BoxDecoration get _fieldDecor => BoxDecoration(
+        color: AppColors.surfaceGlass,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.glassBorder),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.teal.shade700;
-    final inputDecoration = InputDecoration(
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: primaryColor, width: 2)),
-    );
+    final dateLabel =
+        DateFormat('dd MMM yyyy', 'tr').format(_selectedDate);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Kumbaraya Manuel Ekle')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _amountController,
-                decoration: inputDecoration.copyWith(
-                    labelText: 'Kaydedilecek Tutar', prefixText: '₺ '),
-                // ... (diğer özellikler aynı)
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Kumbaraya Manuel Ekle'),
+        backgroundColor: Color(0xCC000000),
+        border: Border(
+            bottom:
+                BorderSide(color: AppColors.separator, width: 0.5)),
+      ),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Text('Kaydedilecek Tutar',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            CupertinoTextField(
+              controller: _amountCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                    RegExp(r'[\d,.]')),
+              ],
+              prefix: const Padding(
+                padding: EdgeInsets.only(left: 12),
+                child: Text('₺ ',
+                    style: TextStyle(color: AppColors.textPrimary)),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _dateController,
-                readOnly: true,
-                onTap: () => _selectDate(context),
-                decoration: inputDecoration.copyWith(
-                  labelText: 'Tasarruf Tarihi',
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.calendar_today_outlined),
-                    onPressed: () => _selectDate(context),
-                  ),
+              placeholder: '0.00',
+              placeholderStyle:
+                  const TextStyle(color: AppColors.textSecondary),
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: _fieldDecor,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+            ),
+            const SizedBox(height: 16),
+            const Text('Tasarruf Tarihi',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: _pickDate,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 12),
+                decoration: _fieldDecor,
+                child: Row(
+                  children: [
+                    const Icon(CupertinoIcons.calendar,
+                        color: AppColors.primaryBlue, size: 18),
+                    const SizedBox(width: 10),
+                    Text(dateLabel,
+                        style: const TextStyle(
+                            color: AppColors.textPrimary)),
+                  ],
                 ),
               ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _submitManualSave,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Kumbaraya Kaydet'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 32),
+            CupertinoButton.filled(
+              borderRadius: BorderRadius.circular(12),
+              onPressed: _isLoading ? null : _submit,
+              child: _isLoading
+                  ? const CupertinoActivityIndicator(
+                      color: CupertinoColors.white)
+                  : const Text('Kumbaraya Kaydet'),
+            ),
+          ],
         ),
       ),
     );

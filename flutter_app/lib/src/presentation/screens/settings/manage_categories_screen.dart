@@ -1,60 +1,100 @@
 // File: flutter_app/lib/src/presentation/screens/settings/manage_categories_screen.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_category_model.dart';
 import '../../providers/category_providers.dart';
+import '../../widgets/glass_card.dart';
 import 'add_edit_category_form_screen.dart';
 
-class ManageCategoriesScreen extends ConsumerWidget {
+class ManageCategoriesScreen extends ConsumerStatefulWidget {
   const ManageCategoriesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final primaryColor = Colors.teal.shade700;
+  ConsumerState<ManageCategoriesScreen> createState() =>
+      _ManageCategoriesScreenState();
+}
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: Colors.grey.shade100,
-        appBar: AppBar(
-          title: const Text('Özel Kategorileri Yönet'),
-          backgroundColor: Colors.grey.shade100,
-          elevation: 0,
-          foregroundColor: Colors.grey.shade800,
-          bottom: TabBar(
-            labelColor: primaryColor,
-            unselectedLabelColor: Colors.grey.shade600,
-            indicatorColor: primaryColor,
-            tabs: const [
-              Tab(text: 'Gelir Kategorileri'),
-              Tab(text: 'Gider Kategorileri'),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Kategorileri Yenile',
-              onPressed: () {
-                ref.invalidate(incomeCustomCategoriesProvider);
-                ref.invalidate(expenseCustomCategoriesProvider);
-              },
-            )
-          ],
+class _ManageCategoriesScreenState
+    extends ConsumerState<ManageCategoriesScreen> {
+  int _selectedSegment = 0; // 0=Gider, 1=Gelir
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('Özel Kategoriler'),
+        backgroundColor: const Color(0xCC000000),
+        border: const Border(
+            bottom:
+                BorderSide(color: AppColors.separator, width: 0.5)),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {
+            ref.invalidate(incomeCustomCategoriesProvider);
+            ref.invalidate(expenseCustomCategoriesProvider);
+          },
+          child: const Icon(CupertinoIcons.refresh,
+              color: AppColors.primaryBlue, size: 20),
         ),
-        body: TabBarView(
+      ),
+      child: SafeArea(
+        child: Column(
           children: [
-            _CategoryList(
-                type: 'income', provider: incomeCustomCategoriesProvider),
-            _CategoryList(
-                type: 'expense', provider: expenseCustomCategoriesProvider),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: CupertinoSlidingSegmentedControl<int>(
+                groupValue: _selectedSegment,
+                backgroundColor: AppColors.surfaceGlass,
+                thumbColor: AppColors.primaryBlue,
+                children: const {
+                  0: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Gider Kategorileri',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                  1: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Gelir Kategorileri',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                },
+                onValueChanged: (v) {
+                  if (v != null) setState(() => _selectedSegment = v);
+                },
+              ),
+            ),
+            Expanded(
+              child: _selectedSegment == 0
+                  ? _CategoryList(
+                      type: 'expense',
+                      provider: expenseCustomCategoriesProvider)
+                  : _CategoryList(
+                      type: 'income',
+                      provider: incomeCustomCategoriesProvider),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: CupertinoButton.filled(
+                borderRadius: BorderRadius.circular(12),
+                onPressed: () => Navigator.of(context).push(
+                  CupertinoPageRoute(
+                      builder: (_) =>
+                          const AddEditCategoryFormScreen()),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(CupertinoIcons.add, size: 18),
+                    SizedBox(width: 8),
+                    Text('Yeni Kategori'),
+                  ],
+                ),
+              ),
+            ),
           ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (context) => const AddEditCategoryFormScreen())),
-          label: const Text('Yeni Kategori'),
-          icon: const Icon(Icons.add),
-          backgroundColor: primaryColor,
         ),
       ),
     );
@@ -68,49 +108,66 @@ class _CategoryList extends ConsumerWidget {
 
   const _CategoryList({required this.type, required this.provider});
 
-  void _navigateToEditCategory(
-      BuildContext context, WidgetRef ref, UserCategoryModel category) {
-    Navigator.of(context).push(MaterialPageRoute(
-        builder: (context) =>
-            AddEditCategoryFormScreen(categoryToEdit: category)));
+  void _showActions(BuildContext context, WidgetRef ref,
+      UserCategoryModel category) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (_) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(CupertinoPageRoute(
+                  builder: (_) => AddEditCategoryFormScreen(
+                      categoryToEdit: category)));
+            },
+            child: const Text('Düzenle'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.of(context).pop();
+              _confirmDelete(context, ref, category);
+            },
+            child: const Text('Sil'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('İptal'),
+        ),
+      ),
+    );
   }
 
-  void _confirmAndDeleteCategory(
-      BuildContext context, WidgetRef ref, UserCategoryModel category) {
-    showDialog(
+  void _confirmDelete(BuildContext context, WidgetRef ref,
+      UserCategoryModel category) {
+    showCupertinoDialog<void>(
       context: context,
-      builder: (BuildContext ctx) => AlertDialog(
+      builder: (_) => CupertinoAlertDialog(
         title: const Text('Kategoriyi Sil'),
         content: Text(
             '"${category.categoryName}" kategorisini silmek istediğinizden emin misiniz?'),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('İptal')),
-          TextButton(
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.error),
-            child: const Text('Sil'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('İptal'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
             onPressed: () async {
-              Navigator.of(ctx).pop();
+              Navigator.of(context).pop();
               try {
-                if (category.id == null)
-                  throw Exception("Kategori ID bulunamadı.");
+                if (category.id == null) {
+                  throw Exception('Kategori ID bulunamadı.');
+                }
                 await ref
                     .read(provider.notifier)
                     .deleteCustomCategory(category.id!);
-                if (context.mounted)
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Kategori başarıyla silindi!'),
-                      backgroundColor: Colors.green));
-              } catch (e) {
-                if (context.mounted)
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                          'Hata: ${e.toString().replaceFirst("Exception: ", "")}'),
-                      backgroundColor: Colors.redAccent));
-              }
+              } catch (_) {}
             },
+            child: const Text('Sil'),
           ),
         ],
       ),
@@ -120,89 +177,116 @@ class _CategoryList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncCategories = ref.watch(provider);
-    final theme = Theme.of(context);
+    final typeLabel = type == 'income' ? 'gelir' : 'gider';
+    final iconColor =
+        type == 'income' ? AppColors.incomeGreen : AppColors.danger;
 
     return asyncCategories.when(
       data: (categories) {
         if (categories.isEmpty) {
           return Center(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(24),
               child: Text(
-                  'Henüz özel ${type == 'income' ? 'gelir' : 'gider'} kategorisi eklemediniz.\nYeni bir tane eklemek için \'+\' butonuna dokunun!',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(color: Colors.grey.shade600)),
+                'Henüz özel $typeLabel kategorisi eklemediniz.\nYeni bir tane eklemek için aşağıdaki butona dokunun!',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 14),
+              ),
             ),
           );
         }
-        return ListView.builder(
-          padding: const EdgeInsets.all(12.0),
-          itemCount: categories.length,
-          itemBuilder: (context, index) {
-            final category = categories[index];
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 5),
-              elevation: 1.5,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: CircleAvatar(
-                    backgroundColor:
-                        (type == 'income' ? Colors.green : Colors.red)
-                            .withOpacity(0.1),
-                    child: Icon(Icons.label_outline_rounded,
-                        color: type == 'income'
-                            ? Colors.green.shade700
-                            : Colors.red.shade700)),
-                title: Text(category.categoryName,
-                    style: const TextStyle(fontWeight: FontWeight.w500)),
-                subtitle: category.subcategories.isNotEmpty
-                    ? Text(
-                        'Alt Kategoriler: ${category.subcategories.join(", ")}',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: Colors.grey.shade700),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1)
-                    : const Text('Alt kategori yok',
-                        style: TextStyle(
-                            fontStyle: FontStyle.italic, fontSize: 12)),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (String value) {
-                    if (value == 'edit')
-                      _navigateToEditCategory(context, ref, category);
-                    else if (value == 'delete')
-                      _confirmAndDeleteCategory(context, ref, category);
+        return CustomScrollView(
+          slivers: [
+            CupertinoSliverRefreshControl(
+              onRefresh: () async {
+                ref.invalidate(incomeCustomCategoriesProvider);
+                ref.invalidate(expenseCustomCategoriesProvider);
+              },
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) {
+                    final cat = categories[i];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: GlassCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: iconColor.withValues(alpha: 0.15),
+                                borderRadius:
+                                    BorderRadius.circular(20),
+                              ),
+                              child: Icon(CupertinoIcons.tag_fill,
+                                  color: iconColor, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(cat.categoryName,
+                                      style: const TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 15,
+                                          fontWeight:
+                                              FontWeight.w600)),
+                                  if (cat.subcategories.isNotEmpty)
+                                    Text(
+                                      cat.subcategories.join(', '),
+                                      style: const TextStyle(
+                                          color:
+                                              AppColors.textSecondary,
+                                          fontSize: 12),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    )
+                                  else
+                                    const Text('Alt kategori yok',
+                                        style: TextStyle(
+                                            color:
+                                                AppColors.textSecondary,
+                                            fontSize: 12,
+                                            fontStyle:
+                                                FontStyle.italic)),
+                                ],
+                              ),
+                            ),
+                            CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              onPressed: () =>
+                                  _showActions(context, ref, cat),
+                              child: const Icon(CupertinoIcons.ellipsis,
+                                  color: AppColors.textSecondary,
+                                  size: 18),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(
-                        value: 'edit',
-                        child: ListTile(
-                            leading: Icon(Icons.edit_outlined),
-                            title: Text('Düzenle'))),
-                    const PopupMenuItem<String>(
-                        value: 'delete',
-                        child: ListTile(
-                            leading:
-                                Icon(Icons.delete_outline, color: Colors.red),
-                            title: Text('Sil',
-                                style: TextStyle(color: Colors.red)))),
-                  ],
+                  childCount: categories.length,
                 ),
               ),
-            );
-          },
+            ),
+          ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => Center(
-          child: Padding(
-        padding: const EdgeInsets.all(16.0),
+      loading: () =>
+          const Center(child: CupertinoActivityIndicator()),
+      error: (err, _) => Center(
         child: Text('Kategoriler yüklenemedi: $err',
-            style: TextStyle(color: theme.colorScheme.error),
+            style: const TextStyle(color: AppColors.danger),
             textAlign: TextAlign.center),
-      )),
+      ),
     );
   }
 }

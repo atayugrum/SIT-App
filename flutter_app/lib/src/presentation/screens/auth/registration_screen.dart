@@ -1,9 +1,10 @@
 // File: lib/src/presentation/screens/auth/registration_screen.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../providers/auth_providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../providers/auth_providers.dart';
+import '../../../core/theme/app_theme.dart';
 
 class RegistrationScreen extends ConsumerStatefulWidget {
   const RegistrationScreen({super.key});
@@ -13,13 +14,11 @@ class RegistrationScreen extends ConsumerStatefulWidget {
 }
 
 class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _emailController           = TextEditingController();
+  final _passwordController        = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _fullNameController = TextEditingController();
-  final _usernameController = TextEditingController();
-  final _birthDateController = TextEditingController();
+  final _fullNameController        = TextEditingController();
+  final _usernameController        = TextEditingController();
   DateTime? _selectedBirthDate;
   bool _isLoading = false;
 
@@ -30,43 +29,92 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
     _confirmPasswordController.dispose();
     _fullNameController.dispose();
     _usernameController.dispose();
-    _birthDateController.dispose();
     super.dispose();
   }
 
-  Future<void> _selectBirthDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+  void _showAlert(String title, String message) {
+    showCupertinoDialog(
       context: context,
-      locale: const Locale('tr', 'TR'),
-      initialDate: _selectedBirthDate ?? DateTime(2000, 1, 1),
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now().subtract(const Duration(days: 365 * 18 + 4)),
-      helpText: 'Doğum Tarihinizi Seçin',
-      confirmText: 'Seç',
+      builder: (_) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
     );
-    if (picked != null && picked != _selectedBirthDate) {
-      setState(() {
-        _selectedBirthDate = picked;
-        _birthDateController.text = DateFormat('yyyy-MM-dd').format(picked);
-      });
+  }
+
+  bool _validate() {
+    if (_fullNameController.text.trim().isEmpty) {
+      _showAlert('Eksik Alan', 'Lütfen tam adınızı girin.'); return false;
     }
+    if (_usernameController.text.trim().isEmpty) {
+      _showAlert('Eksik Alan', 'Lütfen bir kullanıcı adı girin.'); return false;
+    }
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+      _showAlert('Geçersiz E-posta', 'Lütfen geçerli bir e-posta adresi girin.'); return false;
+    }
+    if (_passwordController.text.length < 6) {
+      _showAlert('Zayıf Şifre', 'Şifre en az 6 karakter olmalıdır.'); return false;
+    }
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showAlert('Şifre Uyuşmuyor', 'Girdiğiniz şifreler eşleşmiyor.'); return false;
+    }
+    if (_selectedBirthDate == null) {
+      _showAlert('Eksik Alan', 'Lütfen doğum tarihinizi seçin.'); return false;
+    }
+    return true;
+  }
+
+  void _pickBirthDate() {
+    DateTime tempDate = _selectedBirthDate ?? DateTime(2000, 1, 1);
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) => Container(
+        height: 300,
+        color: const Color(0xFF1C1C1E),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  child: const Text('İptal', style: TextStyle(color: AppColors.textSecondary)),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                CupertinoButton(
+                  child: const Text('Seç', style: TextStyle(color: AppColors.primaryBlue)),
+                  onPressed: () {
+                    setState(() => _selectedBirthDate = tempDate);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: tempDate,
+                maximumDate: DateTime.now().subtract(const Duration(days: 365 * 18 + 4)),
+                minimumDate: DateTime(1900),
+                onDateTimeChanged: (d) => tempDate = d,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _registerUser() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedBirthDate == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Lütfen doğum tarihinizi seçin.'),
-              backgroundColor: Colors.orangeAccent),
-        );
-      }
-      return;
-    }
-
+    if (!_validate()) return;
     setState(() => _isLoading = true);
-
     try {
       final authService = ref.read(authServiceProvider);
       await authService.signUpAndCreateProfile(
@@ -76,33 +124,23 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
         username: _usernameController.text.trim(),
         birthDate: _selectedBirthDate!,
       );
-
       await authService.signOut();
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Kayıt başarılı! Lütfen giriş yapın.'),
-              backgroundColor: Colors.green),
-        );
+        _showAlert('Kayıt Başarılı', 'Hesabınız oluşturuldu. Lütfen giriş yapın.');
         if (Navigator.of(context).canPop()) Navigator.of(context).pop();
       }
     } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Kayıt başarısız. Lütfen tekrar deneyin.';
-      if (e.code == 'weak-password')
-        errorMessage = 'Belirlediğiniz şifre çok zayıf.';
-      else if (e.code == 'email-already-in-use')
-        errorMessage = 'Bu e-posta adresi ile zaten bir hesap mevcut.';
-      else if (e.code == 'invalid-email')
-        errorMessage = 'E-posta adresi geçerli değil.';
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(errorMessage), backgroundColor: Colors.redAccent));
+      String msg = 'Kayıt başarısız. Lütfen tekrar deneyin.';
+      if (e.code == 'weak-password') {
+        msg = 'Belirlediğiniz şifre çok zayıf.';
+      } else if (e.code == 'email-already-in-use') {
+        msg = 'Bu e-posta ile zaten bir hesap mevcut.';
+      } else if (e.code == 'invalid-email') {
+        msg = 'E-posta adresi geçerli değil.';
+      }
+      if (mounted) _showAlert('Kayıt Hatası', msg);
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString().replaceFirst("Exception: ", "")),
-            backgroundColor: Colors.redAccent));
+      if (mounted) _showAlert('Hata', e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -110,135 +148,150 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.teal.shade700;
-    final inputDecoration = InputDecoration(
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: primaryColor, width: 2)),
-    );
+    final birthDateText = _selectedBirthDate != null
+        ? DateFormat('dd.MM.yyyy').format(_selectedBirthDate!)
+        : 'Doğum tarihinizi seçin';
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Hesap Oluştur')),
-      body: Center(
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Hesap Oluştur'),
+        backgroundColor: Color(0xCC000000),
+        border: Border(bottom: BorderSide(color: Color(0xFF2C2C2E), width: 0.5)),
+      ),
+      child: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextFormField(
-                  controller: _fullNameController,
-                  decoration: inputDecoration.copyWith(
-                      labelText: 'Tam Adınız',
-                      prefixIcon: const Icon(Icons.person_outline)),
-                  validator: (value) => value == null || value.isEmpty
-                      ? 'Lütfen tam adınızı girin'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: inputDecoration.copyWith(
-                      labelText: 'Kullanıcı Adı',
-                      prefixIcon: const Icon(Icons.account_circle_outlined)),
-                  validator: (value) => value == null || value.isEmpty
-                      ? 'Lütfen bir kullanıcı adı girin'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: inputDecoration.copyWith(
-                      labelText: 'E-posta',
-                      prefixIcon: const Icon(Icons.email_outlined)),
-                  validator: (value) {
-                    if (value == null || value.isEmpty)
-                      return 'Lütfen e-posta adresinizi girin';
-                    if (!value.contains('@') || !value.contains('.'))
-                      return 'Geçerli bir e-posta adresi girin';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: inputDecoration.copyWith(
-                      labelText: 'Şifre',
-                      prefixIcon: const Icon(Icons.lock_outline)),
-                  validator: (value) {
-                    if (value == null || value.isEmpty)
-                      return 'Lütfen bir şifre belirleyin';
-                    if (value.length < 6)
-                      return 'Şifre en az 6 karakter olmalıdır';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _confirmPasswordController,
-                  obscureText: true,
-                  decoration: inputDecoration.copyWith(
-                      labelText: 'Şifreyi Onayla',
-                      prefixIcon: const Icon(Icons.lock_person_outlined)),
-                  validator: (value) {
-                    if (value == null || value.isEmpty)
-                      return 'Lütfen şifrenizi tekrar girin';
-                    if (value != _passwordController.text)
-                      return 'Şifreler uyuşmuyor';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _birthDateController,
-                  readOnly: true,
-                  decoration: inputDecoration.copyWith(
-                      labelText: 'Doğum Tarihi',
-                      hintText: 'Doğum tarihinizi seçin',
-                      suffixIcon: IconButton(
-                          icon: const Icon(Icons.calendar_today_outlined),
-                          onPressed: () => _selectBirthDate(context))),
-                  onTap: () => _selectBirthDate(context),
-                  validator: (value) => _selectedBirthDate == null
-                      ? 'Lütfen doğum tarihinizi seçin'
-                      : null,
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _registerUser,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.0)),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _FieldLabel(label: 'TAM AD'),
+              const SizedBox(height: 8),
+              _buildField(_fullNameController, 'Adınız ve soyadınız', CupertinoIcons.person),
+              const SizedBox(height: 20),
+
+              const _FieldLabel(label: 'KULLANICI ADI'),
+              const SizedBox(height: 8),
+              _buildField(_usernameController, 'kullanici_adi', CupertinoIcons.at),
+              const SizedBox(height: 20),
+
+              const _FieldLabel(label: 'E-POSTA'),
+              const SizedBox(height: 8),
+              _buildField(
+                _emailController, 'ornek@eposta.com', CupertinoIcons.mail,
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 20),
+
+              const _FieldLabel(label: 'ŞİFRE'),
+              const SizedBox(height: 8),
+              _buildField(_passwordController, '••••••••', CupertinoIcons.lock, obscure: true),
+              const SizedBox(height: 20),
+
+              const _FieldLabel(label: 'ŞİFRE ONAYI'),
+              const SizedBox(height: 8),
+              _buildField(
+                _confirmPasswordController, '••••••••', CupertinoIcons.lock_shield,
+                obscure: true,
+              ),
+              const SizedBox(height: 20),
+
+              const _FieldLabel(label: 'DOĞUM TARİHİ'),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: _pickBirthDate,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  decoration: _inputDecoration,
+                  child: Row(
+                    children: [
+                      const Icon(CupertinoIcons.calendar, color: AppColors.textSecondary, size: 18),
+                      const SizedBox(width: 10),
+                      Text(
+                        birthDateText,
+                        style: TextStyle(
+                          color: _selectedBirthDate != null
+                              ? AppColors.textPrimary
+                              : AppColors.textTertiary,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Text('Kaydol', style: TextStyle(fontSize: 16)),
                 ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                          if (Navigator.of(context).canPop())
-                            Navigator.of(context).pop();
-                        },
-                  child: const Text('Zaten bir hesabınız var mı? Giriş yapın'),
+              ),
+              const SizedBox(height: 36),
+
+              CupertinoButton.filled(
+                onPressed: _isLoading ? null : _registerUser,
+                borderRadius: BorderRadius.circular(14),
+                child: _isLoading
+                    ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+                    : const Text(
+                        'Kaydol',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              CupertinoButton(
+                onPressed: _isLoading
+                    ? null
+                    : () { if (Navigator.of(context).canPop()) Navigator.of(context).pop(); },
+                child: const Text(
+                  'Zaten bir hesabınız var mı? Giriş yapın',
+                  style: TextStyle(color: AppColors.primaryBlue, fontSize: 15),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildField(
+    TextEditingController controller,
+    String placeholder,
+    IconData icon, {
+    bool obscure = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return CupertinoTextField(
+      controller: controller,
+      obscureText: obscure,
+      keyboardType: keyboardType,
+      placeholder: placeholder,
+      placeholderStyle: const TextStyle(color: AppColors.textTertiary),
+      prefix: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Icon(icon, color: AppColors.textSecondary, size: 18),
+      ),
+      style: const TextStyle(color: AppColors.textPrimary),
+      decoration: _inputDecoration,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+    );
+  }
+
+  static final BoxDecoration _inputDecoration = BoxDecoration(
+    color: AppColors.surfaceGlass,
+    borderRadius: BorderRadius.circular(12),
+    border: Border.all(color: AppColors.glassBorder, width: 0.5),
+  );
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String label;
+  const _FieldLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: AppColors.textSecondary,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.8,
       ),
     );
   }

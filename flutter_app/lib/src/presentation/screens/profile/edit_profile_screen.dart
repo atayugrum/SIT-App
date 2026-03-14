@@ -1,7 +1,9 @@
 // File: lib/src/presentation/screens/profile/edit_profile_screen.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_profile_model.dart';
 import '../../providers/profile_providers.dart';
 
@@ -10,169 +12,228 @@ class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key, required this.initialProfile});
 
   @override
-  ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
+  ConsumerState<EditProfileScreen> createState() =>
+      _EditProfileScreenState();
 }
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
-  final _formKey = GlobalKey<FormState>();
-  late TextEditingController _fullNameController;
-  late TextEditingController _usernameController;
-  late TextEditingController _birthDateController;
+  late final TextEditingController _fullNameCtrl;
+  late final TextEditingController _usernameCtrl;
   DateTime? _selectedBirthDate;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _fullNameController =
+    _fullNameCtrl =
         TextEditingController(text: widget.initialProfile.fullName);
-    _usernameController =
+    _usernameCtrl =
         TextEditingController(text: widget.initialProfile.username);
-    _birthDateController =
-        TextEditingController(text: widget.initialProfile.birthDate);
     if (widget.initialProfile.birthDate.isNotEmpty) {
       try {
-        _selectedBirthDate =
-            DateFormat('yyyy-MM-dd').parse(widget.initialProfile.birthDate);
-      } catch (e) {
-        print(
-            "Doğum tarihi ayrıştırılırken hata: ${widget.initialProfile.birthDate} - $e");
-      }
+        _selectedBirthDate = DateFormat('yyyy-MM-dd')
+            .parse(widget.initialProfile.birthDate);
+      } catch (_) {}
     }
   }
 
   @override
   void dispose() {
-    _fullNameController.dispose();
-    _usernameController.dispose();
-    _birthDateController.dispose();
+    _fullNameCtrl.dispose();
+    _usernameCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _selectBirthDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+  void _showAlert(String msg) {
+    showCupertinoDialog(
       context: context,
-      locale: const Locale('tr', 'TR'),
-      initialDate: _selectedBirthDate ?? DateTime(2000, 1, 1),
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now().subtract(const Duration(days: 365 * 18 + 4)),
+      builder: (_) => CupertinoAlertDialog(
+        content: Text(msg),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
     );
-    if (picked != null && picked != _selectedBirthDate) {
-      setState(() {
-        _selectedBirthDate = picked;
-        _birthDateController.text = DateFormat('yyyy-MM-dd').format(picked);
-      });
-    }
   }
 
-  Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _pickBirthDate() {
+    final initial = _selectedBirthDate ?? DateTime(1990);
+    DateTime temp = initial;
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (_) => Container(
+        height: 320,
+        color: const Color(0xFF1C1C1E),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  child: const Text('İptal',
+                      style: TextStyle(color: AppColors.textSecondary)),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                const Text('Doğum Tarihi',
+                    style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600)),
+                CupertinoButton(
+                  child: const Text('Uygula',
+                      style: TextStyle(color: AppColors.primaryBlue)),
+                  onPressed: () {
+                    setState(() => _selectedBirthDate = temp);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: initial,
+                minimumDate: DateTime(1900),
+                maximumDate: DateTime.now()
+                    .subtract(const Duration(days: 365 * 18)),
+                onDateTimeChanged: (d) => temp = d,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    final name = _fullNameCtrl.text.trim();
+    final username = _usernameCtrl.text.trim();
+    if (name.isEmpty) {
+      _showAlert('Tam ad boş bırakılamaz.');
+      return;
+    }
+    if (username.isEmpty) {
+      _showAlert('Kullanıcı adı boş bırakılamaz.');
+      return;
+    }
+    if (_selectedBirthDate == null) {
+      _showAlert('Lütfen doğum tarihinizi seçin.');
+      return;
+    }
     setState(() => _isLoading = true);
     final updates = <String, dynamic>{
-      'fullName': _fullNameController.text.trim(),
-      'username': _usernameController.text.trim(),
-      'birthDate': _birthDateController.text.trim(),
+      'fullName': name,
+      'username': username,
+      'birthDate': DateFormat('yyyy-MM-dd').format(_selectedBirthDate!),
     };
-
     try {
       await ref
           .read(profileServiceProvider)
           .updateUserProfile(widget.initialProfile.uid, updates);
       ref.invalidate(userProfileProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Profil başarıyla güncellendi!'),
-              backgroundColor: Colors.green),
-        );
-        Navigator.of(context).pop();
-      }
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  'Profil güncellenemedi: ${e.toString().replaceFirst("Exception: ", "")}'),
-              backgroundColor: Colors.redAccent),
-        );
+        _showAlert(
+            'Profil güncellenemedi: ${e.toString().replaceFirst("Exception: ", "")}');
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  BoxDecoration get _fieldDecor => BoxDecoration(
+        color: AppColors.surfaceGlass,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.glassBorder),
+      );
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profili Düzenle')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _fullNameController,
-                decoration: const InputDecoration(
-                    labelText: 'Tam Ad',
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12.0)))),
-                validator: (value) => value == null || value.isEmpty
-                    ? 'Tam ad boş bırakılamaz'
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _usernameController,
-                decoration: const InputDecoration(
-                    labelText: 'Kullanıcı Adı',
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12.0)))),
-                validator: (value) => value == null || value.isEmpty
-                    ? 'Kullanıcı adı boş bırakılamaz'
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _birthDateController,
-                readOnly: true,
-                decoration: InputDecoration(
-                    labelText: 'Doğum Tarihi',
-                    hintText: 'Doğum tarihinizi seçin',
-                    border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12.0))),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.calendar_today_outlined),
-                      onPressed: () => _selectBirthDate(context),
-                    )),
-                validator: (value) => value == null || value.isEmpty
-                    ? 'Lütfen doğum tarihinizi seçin'
-                    : null,
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _saveProfile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal.shade700,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0)),
+    final dateLabel = _selectedBirthDate == null
+        ? 'Doğum tarihinizi seçin'
+        : DateFormat('dd MMM yyyy', 'tr').format(_selectedBirthDate!);
+
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Profili Düzenle'),
+        backgroundColor: Color(0xCC000000),
+        border: Border(
+            bottom: BorderSide(color: AppColors.separator, width: 0.5)),
+      ),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Text('Tam Ad',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            CupertinoTextField(
+              controller: _fullNameCtrl,
+              placeholder: 'Adınız Soyadınız',
+              placeholderStyle:
+                  const TextStyle(color: AppColors.textSecondary),
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: _fieldDecor,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+            ),
+            const SizedBox(height: 16),
+            const Text('Kullanıcı Adı',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            CupertinoTextField(
+              controller: _usernameCtrl,
+              placeholder: 'kullanici_adi',
+              placeholderStyle:
+                  const TextStyle(color: AppColors.textSecondary),
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: _fieldDecor,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+            ),
+            const SizedBox(height: 16),
+            const Text('Doğum Tarihi',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: _pickBirthDate,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 12),
+                decoration: _fieldDecor,
+                child: Row(
+                  children: [
+                    const Icon(CupertinoIcons.calendar,
+                        color: AppColors.primaryBlue, size: 18),
+                    const SizedBox(width: 10),
+                    Text(dateLabel,
+                        style: TextStyle(
+                          color: _selectedBirthDate != null
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary,
+                        )),
+                  ],
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Değişiklikleri Kaydet',
-                        style: TextStyle(fontSize: 16)),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 32),
+            CupertinoButton.filled(
+              borderRadius: BorderRadius.circular(12),
+              onPressed: _isLoading ? null : _save,
+              child: _isLoading
+                  ? const CupertinoActivityIndicator(
+                      color: CupertinoColors.white)
+                  : const Text('Değişiklikleri Kaydet'),
+            ),
+          ],
         ),
       ),
     );

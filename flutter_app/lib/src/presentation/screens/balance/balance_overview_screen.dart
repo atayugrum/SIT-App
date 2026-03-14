@@ -1,120 +1,20 @@
 // File: lib/src/presentation/screens/balance/balance_overview_screen.dart
-
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
+
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/account_model.dart';
 import '../../../presentation/providers/account_providers.dart';
-import '../accounts/account_form_screen.dart';
+import '../../widgets/glass_card.dart';
 import '../accounts/account_detail_screen.dart';
+import '../accounts/account_form_screen.dart';
 
 class BalanceOverviewScreen extends ConsumerWidget {
   const BalanceOverviewScreen({super.key});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final accountsAsync = ref.watch(accountsProvider);
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      appBar: AppBar(
-        title: const Text('Hesap ve Bakiye Özeti'),
-        backgroundColor: Colors.grey.shade100,
-        elevation: 0,
-        foregroundColor: Colors.grey.shade800,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () =>
-                ref.read(accountsProvider.notifier).fetchAccounts(),
-          )
-        ],
-      ),
-      body: accountsAsync.when(
-        data: (accounts) {
-          if (accounts.isEmpty) {
-            return Center(
-                child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.account_balance_wallet_outlined,
-                      size: 80, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  const Text('Henüz bir hesap oluşturmadınız.',
-                      style: TextStyle(fontSize: 18)),
-                  const SizedBox(height: 8),
-                  const Text(
-                      'Yeni bir hesap eklemek için "+" butonuna dokunun.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ));
-          }
-          final totalFinancialBalance = accounts
-              .where((acc) => acc.accountType.toLowerCase() != 'investment')
-              .fold<double>(0.0, (sum, acc) => sum + acc.currentBalance);
-
-          final groupedAccounts = groupBy<AccountModel, String>(
-            accounts,
-            (account) => _getAccountTypeDisplayName(account.accountType),
-          );
-
-          return RefreshIndicator(
-            onRefresh: () =>
-                ref.read(accountsProvider.notifier).fetchAccounts(),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12.0),
-              itemCount: groupedAccounts.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return _TotalBalanceCard(balance: totalFinancialBalance);
-                }
-
-                final groupIndex = index - 1;
-                final groupTitle = groupedAccounts.keys.elementAt(groupIndex);
-                final groupAccounts =
-                    groupedAccounts.values.elementAt(groupIndex);
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
-                      child: Text(
-                        groupTitle,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold, color: Colors.black87),
-                      ),
-                    ),
-                    ...groupAccounts
-                        .map((account) => _AccountCard(account: account)),
-                  ],
-                );
-              },
-            ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text("Hata: $err")),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.of(context).push<bool>(
-              MaterialPageRoute(builder: (_) => const AccountFormScreen()));
-        },
-        backgroundColor: Colors.teal.shade700,
-        child: const Icon(Icons.add),
-        tooltip: 'Yeni Hesap Ekle',
-      ),
-    );
-  }
-
-  String _getAccountTypeDisplayName(String type) {
+  static String _typeLabel(String type) {
     switch (type) {
       case 'bank':
         return 'Banka Hesapları';
@@ -130,97 +30,220 @@ class BalanceOverviewScreen extends ConsumerWidget {
         return 'Diğer Hesaplar';
     }
   }
-}
-
-class _TotalBalanceCard extends StatelessWidget {
-  final double balance;
-  const _TotalBalanceCard({required this.balance});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
-    return Card(
-      color: Colors.teal.shade50.withOpacity(0.5),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Toplam Finansal Bakiye',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(color: Colors.teal.shade800)),
-            const SizedBox(height: 8),
-            Text(numberFormat.format(balance),
-                style: theme.textTheme.headlineMedium?.copyWith(
-                    color: Colors.grey.shade900, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text('(Yatırım hesapları hariç)',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: Colors.grey.shade700)),
-          ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accountsAsync = ref.watch(accountsProvider);
+
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('Hesap ve Bakiye Özeti'),
+        backgroundColor: const Color(0xCC000000),
+        border: const Border(
+            bottom: BorderSide(color: AppColors.separator, width: 0.5)),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () =>
+              ref.read(accountsProvider.notifier).fetchAccounts(),
+          child: const Icon(CupertinoIcons.refresh,
+              color: AppColors.primaryBlue, size: 20),
+        ),
+      ),
+      child: SafeArea(
+        child: accountsAsync.when(
+          data: (accounts) {
+            if (accounts.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(CupertinoIcons.creditcard,
+                        size: 64, color: AppColors.textSecondary),
+                    SizedBox(height: 16),
+                    Text('Henüz bir hesap oluşturmadınız.',
+                        style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 16)),
+                    SizedBox(height: 8),
+                    Text(
+                        'Yeni bir hesap eklemek için + butonuna dokunun.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13)),
+                  ],
+                ),
+              );
+            }
+
+            final totalBalance = accounts
+                .where((a) => a.accountType.toLowerCase() != 'investment')
+                .fold<double>(0.0, (sum, a) => sum + a.currentBalance);
+
+            final grouped = groupBy<AccountModel, String>(
+              accounts,
+              (a) => _typeLabel(a.accountType),
+            );
+
+            return CustomScrollView(
+              slivers: [
+                CupertinoSliverRefreshControl(
+                  onRefresh: () =>
+                      ref.read(accountsProvider.notifier).fetchAccounts(),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      // Total balance card
+                      GlassCard(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Toplam Finansal Bakiye',
+                                style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13)),
+                            const SizedBox(height: 8),
+                            Text(
+                              NumberFormat.currency(
+                                      locale: 'tr_TR', symbol: '₺')
+                                  .format(totalBalance),
+                              style: const TextStyle(
+                                  color: AppColors.incomeGreen,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text('(Yatırım hesapları hariç)',
+                                style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      // Grouped accounts
+                      for (final entry in grouped.entries) ...[
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(top: 20, bottom: 8),
+                          child: Text(entry.key,
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                        for (final account in entry.value)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _AccountRow(account: account),
+                          ),
+                      ],
+                      // Add account button
+                      const SizedBox(height: 8),
+                      CupertinoButton.filled(
+                        borderRadius: BorderRadius.circular(12),
+                        onPressed: () => Navigator.of(context).push(
+                          CupertinoPageRoute(
+                              builder: (_) => const AccountFormScreen()),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(CupertinoIcons.add, size: 18),
+                            SizedBox(width: 8),
+                            Text('Yeni Hesap Ekle'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ]),
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () =>
+              const Center(child: CupertinoActivityIndicator()),
+          error: (err, _) => Center(
+            child: Text('Hata: $err',
+                style: const TextStyle(color: AppColors.danger)),
+          ),
         ),
       ),
     );
   }
 }
 
-class _AccountCard extends ConsumerWidget {
+class _AccountRow extends ConsumerWidget {
   final AccountModel account;
-  const _AccountCard({required this.account});
+  const _AccountRow({required this.account});
 
-  IconData _getIconForAccountType(String type) {
-    switch (type.toLowerCase()) {
+  IconData get _icon {
+    switch (account.accountType) {
       case 'bank':
-        return Icons.account_balance_outlined;
-      case 'cash':
-        return Icons.wallet_rounded;
-      case 'credit_card':
-        return Icons.credit_card_outlined;
-      case 'e_wallet':
-        return Icons.account_balance_wallet_outlined;
+        return CupertinoIcons.building_2_fill;
       case 'investment':
-        return Icons.show_chart;
+        return CupertinoIcons.chart_bar_fill;
+      case 'cash':
+        return CupertinoIcons.money_dollar_circle_fill;
+      case 'credit_card':
+        return CupertinoIcons.creditcard_fill;
+      case 'e_wallet':
+        return CupertinoIcons.device_phone_portrait;
       default:
-        return Icons.question_mark_rounded;
+        return CupertinoIcons.square_fill;
     }
   }
 
-  void _confirmAndArchive(BuildContext context, WidgetRef ref) {
-    showDialog(
+  void _showActions(BuildContext context, WidgetRef ref) {
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (_) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.of(context).pop();
+              _confirmArchive(context, ref);
+            },
+            child: const Text('Arşivle'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('İptal'),
+        ),
+      ),
+    );
+  }
+
+  void _confirmArchive(BuildContext context, WidgetRef ref) {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (_) => CupertinoAlertDialog(
         title: Text('${account.accountName} Arşivlensin mi?'),
         content: const Text(
-            'Hesap silinmeyecek, sadece bu listeden gizlenecektir. Arşivlenmiş hesaplara daha sonra ayarlardan ulaşabilirsiniz.'),
+            'Hesap silinmeyecek, sadece bu listeden gizlenecektir.'),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('İptal')),
-          TextButton(
-            style:
-                TextButton.styleFrom(foregroundColor: Colors.orange.shade800),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('İptal'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
             onPressed: () async {
-              Navigator.of(ctx).pop();
+              Navigator.of(context).pop();
               try {
                 await ref
                     .read(accountsProvider.notifier)
                     .archiveAccount(account.id);
-                // --- DÜZELTME 1: await sonrası context kullanımı öncesi kontrol ---
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Hesap arşivlendi.'),
-                    backgroundColor: Colors.blueGrey));
-              } catch (e) {
-                // --- DÜZELTME 2: Hata durumunda da await sonrası context kullanımı öncesi kontrol ---
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Hata: $e'), backgroundColor: Colors.red));
-              }
+              } catch (_) {}
             },
-            child: const Text('Evet, Arşivle'),
+            child: const Text('Arşivle'),
           ),
         ],
       ),
@@ -229,62 +252,65 @@ class _AccountCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final numberFormat = NumberFormat.currency(
-        locale: account.currency == 'USD' ? 'en_US' : 'tr_TR',
-        symbol: account.currency == 'USD' ? '\$' : '₺');
+    final locale =
+        account.currency == 'USD' ? 'en_US' : 'tr_TR';
+    final symbol = account.currency == 'USD' ? '\$' : '₺';
+    final fmt =
+        NumberFormat.currency(locale: locale, symbol: symbol);
+    final balance = account.currentBalance;
+    final isCredit = account.accountType == 'credit_card';
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (context) => AccountDetailScreen(account: account))),
-        leading: CircleAvatar(
-          backgroundColor: Colors.teal.withOpacity(0.1),
-          child: Icon(_getIconForAccountType(account.accountType),
-              color: Colors.teal.shade700),
-        ),
-        title: Text(account.accountName,
-            style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(
-            account.accountType == 'credit_card' ? 'Güncel Borç' : 'Bakiye'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(CupertinoPageRoute(
+          builder: (_) => AccountDetailScreen(account: account))),
+      child: GlassCard(
+        padding: const EdgeInsets.all(14),
+        child: Row(
           children: [
-            Text(
-              numberFormat.format(account.currentBalance),
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                color: account.currentBalance >= 0
-                    ? Colors.green.shade800
-                    : theme.colorScheme.error,
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color:
+                    AppColors.primaryBlue.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child:
+                  Icon(_icon, color: AppColors.primaryBlue, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(account.accountName,
+                      style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  Text(isCredit ? 'Güncel Borç' : 'Bakiye',
+                      style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12)),
+                ],
               ),
             ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'edit') {
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) =>
-                          AccountFormScreen(accountToEdit: account)));
-                } else if (value == 'archive') {
-                  _confirmAndArchive(context, ref);
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                    value: 'edit',
-                    child: ListTile(
-                        leading: Icon(Icons.edit_outlined),
-                        title: Text('Düzenle'))),
-                const PopupMenuItem(
-                    value: 'archive',
-                    child: ListTile(
-                        leading: Icon(Icons.archive_outlined),
-                        title: Text('Arşivle'))),
-              ],
+            Text(
+              fmt.format(balance),
+              style: TextStyle(
+                color: balance >= 0
+                    ? AppColors.incomeGreen
+                    : AppColors.danger,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 4),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => _showActions(context, ref),
+              child: const Icon(CupertinoIcons.ellipsis,
+                  color: AppColors.textSecondary, size: 16),
             ),
           ],
         ),

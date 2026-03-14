@@ -1,115 +1,152 @@
 // File: lib/src/presentation/screens/budgets/budget_form_screen.dart
-
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/categories.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/budget_model.dart';
 import '../../../data/models/budget_suggestion_model.dart';
-import '../../../presentation/providers/budget_providers.dart';
-import '../../../presentation/providers/ai_providers.dart';
-import '../../../core/categories.dart';
+import '../../providers/ai_providers.dart';
 import '../../providers/auth_providers.dart';
+import '../../providers/budget_providers.dart';
 
 class BudgetFormScreen extends ConsumerStatefulWidget {
   final BudgetModel? budgetToEdit;
-
   const BudgetFormScreen({super.key, this.budgetToEdit});
 
   @override
-  ConsumerState<BudgetFormScreen> createState() => _BudgetFormScreenState();
+  ConsumerState<BudgetFormScreen> createState() =>
+      _BudgetFormScreenState();
 }
 
 class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  late TextEditingController _limitAmountController;
+  late final TextEditingController _limitCtrl;
   String? _selectedCategory;
   late DateTime _selectedPeriod;
-
   bool _isFetchingSuggestion = false;
+
   bool get _isEditMode => widget.budgetToEdit != null;
 
   @override
   void initState() {
     super.initState();
-    final budget = widget.budgetToEdit;
-    _limitAmountController = TextEditingController(
-        text: budget?.limitAmount.toStringAsFixed(0) ?? '');
-    _selectedCategory = budget?.category;
+    final b = widget.budgetToEdit;
+    _limitCtrl = TextEditingController(
+        text: b?.limitAmount.toStringAsFixed(0) ?? '');
+    _selectedCategory = b?.category;
     _selectedPeriod = _isEditMode
-        ? DateTime(budget!.year, budget.month)
+        ? DateTime(b!.year, b.month)
         : ref.read(budgetPeriodProvider);
   }
 
   @override
   void dispose() {
-    _limitAmountController.dispose();
+    _limitCtrl.dispose();
     super.dispose();
+  }
+
+  void _showAlert(String msg) {
+    showCupertinoDialog(
+      context: context,
+      builder: (_) => CupertinoAlertDialog(
+        content: Text(msg),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuggestionDialog(BudgetSuggestion suggestion) {
+    showCupertinoDialog(
+      context: context,
+      builder: (_) => CupertinoAlertDialog(
+        title: const Text('AI Bütçe Önerisi'),
+        content: SingleChildScrollView(
+            child: Text(suggestion.rationale)),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Anladım'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _getAISuggestion() async {
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen önce bir kategori seçin.')),
-      );
+      _showAlert('Lütfen önce bir kategori seçin.');
       return;
     }
     setState(() => _isFetchingSuggestion = true);
     try {
-      final suggestion =
-          await ref.read(budgetSuggestionProvider(_selectedCategory!).future);
-      _limitAmountController.text =
+      final suggestion = await ref
+          .read(budgetSuggestionProvider(_selectedCategory!).future);
+      _limitCtrl.text =
           suggestion.suggestedBudget.toStringAsFixed(0);
       if (mounted) _showSuggestionDialog(suggestion);
     } catch (e) {
       if (mounted) {
-        String errorMessage = e.toString().contains("422")
-            ? "Size özel bir bütçe önerebilmemiz için en az 90 günlük harcama verisi gereklidir."
-            : e.toString().replaceFirst("Exception: ", "");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Hata: $errorMessage'),
-              backgroundColor: Colors.red),
-        );
+        final msg = e.toString().contains('422')
+            ? 'Size özel öneri için en az 90 günlük harcama verisi gereklidir.'
+            : e.toString().replaceFirst('Exception: ', '');
+        _showAlert('Hata: $msg');
       }
     } finally {
       if (mounted) setState(() => _isFetchingSuggestion = false);
     }
   }
 
-  void _showSuggestionDialog(BudgetSuggestion suggestion) {
-    showDialog(
+  void _pickCategory() {
+    showCupertinoModalPopup(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('AI Bütçe Önerisi'),
-        content: SingleChildScrollView(child: Text(suggestion.rationale)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Anladım'))
-        ],
+      builder: (_) => CupertinoActionSheet(
+        title: const Text('Kategori Seç'),
+        actions: expenseCategories.keys
+            .map((cat) => CupertinoActionSheetAction(
+                  onPressed: () {
+                    setState(() => _selectedCategory = cat);
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(cat),
+                ))
+            .toList(),
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('İptal'),
+        ),
       ),
     );
   }
 
   Future<void> _saveBudget() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final userId = ref.read(userIdProvider);
-    if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Kullanıcı oturumu bulunamadı.'),
-            backgroundColor: Colors.red),
-      );
+    if (_selectedCategory == null) {
+      _showAlert('Lütfen bir kategori seçin.');
       return;
     }
-
+    final limit = double.tryParse(_limitCtrl.text.trim());
+    if (limit == null || limit <= 0) {
+      _showAlert('Lütfen geçerli bir limit girin.');
+      return;
+    }
+    final userId = ref.read(userIdProvider);
+    if (userId == null) {
+      _showAlert('Kullanıcı oturumu bulunamadı.');
+      return;
+    }
     final newBudget = BudgetModel(
       id: widget.budgetToEdit?.id,
       userId: userId,
       category: _selectedCategory!,
-      limitAmount: double.parse(_limitAmountController.text),
+      limitAmount: limit,
       spentAmount: widget.budgetToEdit?.spentAmount ?? 0.0,
       period: 'monthly',
       year: _selectedPeriod.year,
@@ -117,120 +154,142 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
       createdAt: widget.budgetToEdit?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
     );
-
     try {
       await ref
           .read(budgetActionNotifierProvider.notifier)
           .createOrUpdateBudget(newBudget);
-      if (mounted) {
-        Navigator.of(context).pop(true);
-      }
-    } catch (e) {
-      // Hata yönetimi overview ekranındaki listener tarafından yapılıyor.
-    }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {}
   }
+
+  BoxDecoration get _fieldDecor => BoxDecoration(
+        color: AppColors.surfaceGlass,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.glassBorder),
+      );
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final actionState = ref.watch(budgetActionNotifierProvider);
     final isSaving = actionState is AsyncLoading;
-    final primaryColor = Colors.teal.shade700;
 
-    // DÜZELTME: Ortak stil burada tanımlanıyor ve aşağıda doğru şekilde kullanılıyor.
-    final inputDecoration = InputDecoration(
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: primaryColor, width: 2),
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(
+            _isEditMode ? 'Bütçeyi Düzenle' : 'Yeni Bütçe Oluştur'),
+        backgroundColor: const Color(0xCC000000),
+        border: const Border(
+            bottom:
+                BorderSide(color: AppColors.separator, width: 0.5)),
       ),
-    );
-
-    return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      appBar: AppBar(
-        title: Text(_isEditMode ? 'Bütçeyi Düzenle' : 'Yeni Bütçe Oluştur'),
-        backgroundColor: Colors.grey.shade100,
-        elevation: 0,
-        foregroundColor: Colors.grey.shade800,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Kategori', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedCategory,
-                items: expenseCategories.keys
-                    .map(
-                        (cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                    .toList(),
-                onChanged: _isEditMode
-                    ? null
-                    : (v) => setState(() => _selectedCategory = v),
-                decoration: inputDecoration.copyWith(
-                  hintText: 'Bütçe için bir kategori seçin',
-                  filled: _isEditMode,
-                  fillColor: Colors.grey.shade200,
-                ),
-                validator: (v) =>
-                    v == null ? 'Lütfen bir kategori seçin' : null,
-              ),
-              const SizedBox(height: 24),
-              Text('Aylık Limit', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _limitAmountController,
-                decoration: inputDecoration.copyWith(prefixText: '₺ '),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) => (v == null || v.trim().isEmpty)
-                    ? 'Lütfen bir limit girin'
-                    : null,
-              ),
-              const SizedBox(height: 20),
-              if (!_isEditMode)
-                _isFetchingSuggestion
-                    ? const Center(
-                        child: Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: CircularProgressIndicator()))
-                    : FilledButton.tonalIcon(
-                        onPressed: _getAISuggestion,
-                        icon: const Icon(Icons.lightbulb_outline,
-                            color: Colors.orangeAccent),
-                        label: const Text('AI ile Öneri Al'),
-                        style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            backgroundColor:
-                                Colors.teal.shade50.withOpacity(0.5)),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            // Category
+            const Text('Kategori',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: _isEditMode ? null : _pickCategory,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 12),
+                decoration: _fieldDecor,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _selectedCategory ??
+                            'Bütçe için bir kategori seçin',
+                        style: TextStyle(
+                          color: _selectedCategory != null
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary,
+                        ),
                       ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: isSaving ? null : _saveBudget,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  textStyle: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    if (!_isEditMode)
+                      const Icon(CupertinoIcons.chevron_down,
+                          color: AppColors.textSecondary, size: 14),
+                  ],
                 ),
-                child: isSaving
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 3, color: Colors.white))
-                    : Text(_isEditMode
-                        ? 'Güncellemeyi Kaydet'
-                        : 'Bütçeyi Oluştur'),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 20),
+
+            // Limit amount
+            const Text('Aylık Limit',
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 6),
+            CupertinoTextField(
+              controller: _limitCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly
+              ],
+              prefix: const Padding(
+                padding: EdgeInsets.only(left: 12),
+                child: Text('₺ ',
+                    style: TextStyle(color: AppColors.textPrimary)),
+              ),
+              placeholder: '0',
+              placeholderStyle:
+                  const TextStyle(color: AppColors.textSecondary),
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: _fieldDecor,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+            ),
+            const SizedBox(height: 16),
+
+            // AI suggestion
+            if (!_isEditMode)
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed:
+                    _isFetchingSuggestion ? null : _getAISuggestion,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: AppColors.primaryBlue, width: 0.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (_isFetchingSuggestion)
+                        const CupertinoActivityIndicator()
+                      else
+                        const Icon(CupertinoIcons.sparkles,
+                            color: AppColors.primaryBlue, size: 18),
+                      const SizedBox(width: 8),
+                      const Text('AI ile Öneri Al',
+                          style: TextStyle(
+                              color: AppColors.primaryBlue)),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 32),
+
+            // Save
+            CupertinoButton.filled(
+              borderRadius: BorderRadius.circular(12),
+              onPressed: isSaving ? null : _saveBudget,
+              child: isSaving
+                  ? const CupertinoActivityIndicator(
+                      color: CupertinoColors.white)
+                  : Text(_isEditMode
+                      ? 'Güncellemeyi Kaydet'
+                      : 'Bütçeyi Oluştur'),
+            ),
+          ],
         ),
       ),
     );

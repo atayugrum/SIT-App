@@ -1,19 +1,17 @@
 // File: lib/src/presentation/screens/home/home_screen.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-// Gerekli tüm provider ve ekranlar için importlar
 import '../../providers/analytics_v2_providers.dart';
 import '../../providers/transaction_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/profile_providers.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../widgets/glass_card.dart';
 import '../transactions/transactions_screen.dart';
-import '../analytics/analytics_v2_screen.dart';
-import '../profile/profile_screen.dart';
-import '../budgets/budget_overview_screen.dart';
-import '../balance/balance_overview_screen.dart';
 import '../savings/savings_overview_screen.dart';
+import '../balance/balance_overview_screen.dart';
 import '../investments/investment_overview_screen.dart';
 import '../transactions/batch_transaction_screen.dart';
 import '../transactions/transaction_card.dart';
@@ -23,163 +21,300 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Renk Paleti
-    final Color primaryGreen = Colors.teal.shade700;
-    final Color softGreenBackground = Colors.teal.shade50.withOpacity(0.5);
-
-    // Gerekli verileri izle
-    final analyticsAsync = ref.watch(analyticsV2Provider);
+    final analyticsAsync   = ref.watch(analyticsV2Provider);
     final userProfileAsync = ref.watch(userProfileProvider);
 
-    // Kullanıcı adını al, yoksa "Kullanıcı" de
     final userName = userProfileAsync.when(
-      data: (profile) => profile?.fullName.split(' ').first ?? 'Kullanıcı',
+      data: (p) => p?.fullName.split(' ').first ?? 'Kullanıcı',
       loading: () => '...',
-      error: (e, s) => 'Kullanıcı',
+      error: (_, __) => 'Kullanıcı',
     );
 
-    return Scaffold(
-      backgroundColor: Colors.grey.shade100, // Ana arka planı biraz renklendir
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          'Hoş Geldin, $userName!',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.grey.shade800,
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      child: CustomScrollView(
+        slivers: [
+          // ── Large Title Nav Bar ──────────────────────────────────────────────
+          CupertinoSliverNavigationBar(
+            largeTitle: Text('Merhaba, $userName'),
+            backgroundColor: const Color(0xCC000000),
+            border: const Border(
+              bottom: BorderSide(color: AppColors.separator, width: 0.5),
+            ),
+            trailing: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => ref.read(authServiceProvider).signOut(),
+              child: const Icon(
+                CupertinoIcons.square_arrow_right,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.logout, color: Colors.grey.shade700),
-            tooltip: 'Çıkış Yap',
-            onPressed: () async {
-              await ref.read(authServiceProvider).signOut();
+
+          // ── Pull-to-refresh ──────────────────────────────────────────────────
+          CupertinoSliverRefreshControl(
+            onRefresh: () async {
+              ref.invalidate(analyticsV2Provider);
+              ref.invalidate(transactionsProvider);
             },
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(analyticsV2Provider);
-          ref.invalidate(transactionsProvider);
-        },
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          children: [
-            const SizedBox(height: 10),
-            // Header Kartları
-            analyticsAsync.when(
-              data: (v2Data) => _HeaderSection(
-                totalBalance: v2Data.historical.totalFinancialBalance,
-                savingsBalance: v2Data.historical.savingsBalance,
-                primaryColor: primaryGreen,
-                backgroundColor: softGreenBackground,
-              ),
-              loading: () => const SizedBox(
-                  height: 100,
-                  child: Center(child: CircularProgressIndicator())),
-              error: (err, stack) => _ErrorCard(
-                  message: "Bakiye bilgileri yüklenemedi.",
-                  onRetry: () => ref.invalidate(analyticsV2Provider)),
+
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                // ── Bakiye Glassmorphism Kartı ──────────────────────────────
+                analyticsAsync.when(
+                  data: (v2) => _BalanceGlassCard(
+                    totalBalance: v2.historical.totalFinancialBalance,
+                    savingsBalance: v2.historical.savingsBalance,
+                  ),
+                  loading: () => const _LoadingCard(height: 140),
+                  error: (e, _) => _ErrorCard(
+                    message: 'Bakiye bilgileri yüklenemedi.',
+                    onRetry: () => ref.invalidate(analyticsV2Provider),
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // ── Hızlı Erişim Modül Izgara ───────────────────────────────
+                const _SectionTitle(title: 'Hızlı Erişim'),
+                const SizedBox(height: 14),
+                const _QuickAccessGrid(),
+                const SizedBox(height: 28),
+
+                // ── Son İşlemler ─────────────────────────────────────────────
+                const _SectionTitle(title: 'Son İşlemler'),
+                const SizedBox(height: 14),
+                const _RecentTransactionsList(),
+                const SizedBox(height: 32),
+              ]),
             ),
-            const SizedBox(height: 30),
-            // Modüller
-            _SectionTitle(title: 'Modüller'),
-            const SizedBox(height: 16),
-            _ModuleGrid(primaryColor: primaryGreen),
-            const SizedBox(height: 30),
-            // Son İşlemler
-            _SectionTitle(title: 'Son İşlemler'),
-            const SizedBox(height: 16),
-            const _RecentTransactionsList(),
-            const SizedBox(height: 20),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// --- YARDIMCI WIDGET'LAR ---
+// ── Bakiye Kartı ──────────────────────────────────────────────────────────────
 
-class _HeaderSection extends StatelessWidget {
+class _BalanceGlassCard extends StatelessWidget {
   final double totalBalance;
   final double savingsBalance;
-  final Color primaryColor;
-  final Color backgroundColor;
 
-  const _HeaderSection({
+  const _BalanceGlassCard({
     required this.totalBalance,
     required this.savingsBalance,
-    required this.primaryColor,
-    required this.backgroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      color: backgroundColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final fmt = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'TOPLAM VARLIK',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            fmt.format(totalBalance),
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 36,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(height: 0.5, color: AppColors.glassBorder),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Icon(CupertinoIcons.money_dollar_circle,
+                  color: AppColors.success, size: 16),
+              const SizedBox(width: 6),
+              const Text(
+                'Kumbara',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const Spacer(),
+              Text(
+                fmt.format(savingsBalance),
+                style: const TextStyle(
+                  color: AppColors.success,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Hızlı Erişim Izgara ───────────────────────────────────────────────────────
+
+class _QuickAccessGrid extends StatelessWidget {
+  const _QuickAccessGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _GridItem(
+        label: 'Hesaplar',
+        icon: CupertinoIcons.creditcard_fill,
+        color: AppColors.primaryBlue,
+        onTap: () => _push(context, const BalanceOverviewScreen()),
+      ),
+      _GridItem(
+        label: 'Tasarruf',
+        icon: CupertinoIcons.money_dollar_circle_fill,
+        color: AppColors.success,
+        onTap: () => _push(context, const SavingsOverviewScreen()),
+      ),
+      _GridItem(
+        label: 'Yatırım',
+        icon: CupertinoIcons.chart_bar_fill,
+        color: AppColors.accentIndigo,
+        onTap: () => _push(context, const InvestmentOverviewScreen()),
+      ),
+      _GridItem(
+        label: 'AI Giriş',
+        icon: CupertinoIcons.sparkles,
+        color: AppColors.accentViolet,
+        onTap: () => _push(context, const BatchTransactionScreen()),
+      ),
+    ];
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 4,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 0.85,
+      children: items,
+    );
+  }
+
+  void _push(BuildContext context, Widget screen) {
+    Navigator.of(context).push(
+      CupertinoPageRoute(builder: (_) => screen),
+    );
+  }
+}
+
+class _GridItem extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _GridItem({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: GlassCard(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildBalanceItem(
-              context,
-              'Toplam Varlık',
-              totalBalance,
-              Icons.account_balance_wallet_outlined,
-              primaryColor,
-            ),
             Container(
-              width: 1,
-              height: 60,
-              color: primaryColor.withOpacity(0.2),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
             ),
-            _buildBalanceItem(
-              context,
-              'Kumbara',
-              savingsBalance,
-              Icons.savings_outlined,
-              primaryColor,
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildBalanceItem(BuildContext context, String label, double amount,
-      IconData icon, Color color) {
-    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+// ── Son İşlemler ──────────────────────────────────────────────────────────────
+
+class _RecentTransactionsList extends ConsumerWidget {
+  const _RecentTransactionsList();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final txState = ref.watch(transactionsProvider);
+
+    if (txState.transactions.isEmpty) {
+      return const GlassCard(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Başlamak için ilk işleminizi ekleyin.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 8),
-            Text(label,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(color: color)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          numberFormat.format(amount),
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: Colors.grey.shade900, fontWeight: FontWeight.bold),
-        ),
+        ...txState.transactions
+            .take(4)
+            .map((tx) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: TransactionCard(transaction: tx),
+                )),
+        if (txState.transactions.length > 4)
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute(builder: (_) => const TransactionsScreen()),
+            ),
+            child: const Text(
+              'Tümünü Gör →',
+              style: TextStyle(color: AppColors.primaryBlue, fontSize: 15),
+            ),
+          ),
       ],
     );
   }
 }
+
+// ── Yardımcılar ───────────────────────────────────────────────────────────────
 
 class _SectionTitle extends StatelessWidget {
   final String title;
@@ -189,153 +324,28 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: Theme.of(context)
-          .textTheme
-          .headlineSmall
-          ?.copyWith(color: Colors.grey.shade800, fontWeight: FontWeight.bold),
-    );
-  }
-}
-
-class _ModuleGrid extends StatelessWidget {
-  final Color primaryColor;
-  const _ModuleGrid({required this.primaryColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 4,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 16,
-      children: [
-        _ModuleCard(
-            label: 'İşlemler',
-            icon: Icons.swap_horiz_rounded,
-            color: primaryColor,
-            onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TransactionsScreen()))),
-        _ModuleCard(
-            label: 'Hesaplar',
-            icon: Icons.account_balance_wallet_outlined,
-            color: primaryColor,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const BalanceOverviewScreen()))),
-        _ModuleCard(
-            label: 'Tasarruf',
-            icon: Icons.savings_outlined,
-            color: primaryColor,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const SavingsOverviewScreen()))),
-        _ModuleCard(
-            label: 'Bütçeler',
-            icon: Icons.pie_chart_outline_rounded,
-            color: primaryColor,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const BudgetOverviewScreen()))),
-        _ModuleCard(
-            label: 'Yatırım',
-            icon: Icons.show_chart_rounded,
-            color: primaryColor,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const InvestmentOverviewScreen()))),
-        _ModuleCard(
-            label: 'Analiz',
-            icon: Icons.bar_chart_rounded,
-            color: primaryColor,
-            onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AnalyticsV2Screen()))),
-        _ModuleCard(
-            label: 'AI Giriş',
-            icon: Icons.auto_awesome_rounded,
-            color: primaryColor,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const BatchTransactionScreen()))),
-        _ModuleCard(
-            label: 'Profil',
-            icon: Icons.person_outline_rounded,
-            color: primaryColor,
-            onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProfileScreen()))),
-      ],
-    );
-  }
-}
-
-class _ModuleCard extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ModuleCard({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Colors.grey.shade800),
-            ),
-          ],
-        ),
+      style: const TextStyle(
+        color: AppColors.textPrimary,
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.2,
       ),
     );
   }
 }
 
-class _RecentTransactionsList extends ConsumerWidget {
-  const _RecentTransactionsList();
+class _LoadingCard extends StatelessWidget {
+  final double height;
+  const _LoadingCard({required this.height});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final transactionsState = ref.watch(transactionsProvider);
-    return transactionsState.transactions.isEmpty
-        ? const Card(
-            child: Padding(
-              padding: EdgeInsets.all(24.0),
-              child:
-                  Center(child: Text("Başlamak için ilk işleminizi ekleyin.")),
-            ),
-          )
-        : Column(
-            children: [
-              ...transactionsState.transactions
-                  .take(4)
-                  .map((tx) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2.0),
-                        child: TransactionCard(transaction: tx),
-                      ))
-                  .toList(),
-              const SizedBox(height: 10),
-              if (transactionsState.transactions.length > 4)
-                TextButton(
-                    onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const TransactionsScreen())),
-                    child: const Text("Tümünü Gör →"))
-            ],
-          );
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: const GlassCard(
+        child: Center(child: CupertinoActivityIndicator()),
+      ),
+    );
   }
 }
 
@@ -346,18 +356,21 @@ class _ErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: Colors.red.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Icon(Icons.error_outline, color: Colors.red.shade700),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-            IconButton(onPressed: onRetry, icon: const Icon(Icons.refresh))
-          ],
-        ),
+    return GlassCard(
+      fillColor: const Color(0x1AFF453A),
+      child: Row(
+        children: [
+          const Icon(CupertinoIcons.exclamationmark_circle, color: AppColors.danger, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(message, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+          ),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: onRetry,
+            child: const Icon(CupertinoIcons.refresh, color: AppColors.primaryBlue, size: 20),
+          ),
+        ],
       ),
     );
   }

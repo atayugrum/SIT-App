@@ -1,10 +1,11 @@
 // File: lib/src/presentation/screens/transactions/transactions_screen.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../../providers/account_providers.dart';
 import '../../providers/transaction_providers.dart';
-import '../../../data/models/transaction_model.dart';
+import '../../../core/theme/app_theme.dart';
 import 'transaction_card.dart';
 import 'transaction_flow_screen.dart';
 import 'batch_transaction_screen.dart';
@@ -15,255 +16,353 @@ class TransactionsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final transactionsState = ref.watch(transactionsProvider);
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('İşlemlerim'),
-        automaticallyImplyLeading: false,
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.backgroundDark,
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('İşlemlerim'),
+        backgroundColor: const Color(0xCC000000),
+        border: const Border(bottom: BorderSide(color: AppColors.separator, width: 0.5)),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => _showAddOptions(context),
+          child: const Icon(CupertinoIcons.add_circled_solid, color: AppColors.primaryBlue),
+        ),
       ),
-      body: Column(
-        children: [
-          _HeaderSection(),
-          const Divider(height: 1, thickness: 1),
-          Expanded(
-            child: transactionsState.isLoading &&
-                    transactionsState.transactions.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : transactionsState.error != null
-                    ? Center(
-                        child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text('Hata: ${transactionsState.error}',
-                                textAlign: TextAlign.center,
-                                style:
-                                    TextStyle(color: theme.colorScheme.error))))
-                    : transactionsState.transactions.isEmpty
-                        ? const Center(
-                            child: Text(
-                                'Seçili kriterlere uygun işlem bulunamadı.'))
-                        : RefreshIndicator(
-                            onRefresh: () => ref
-                                .read(transactionsProvider.notifier)
-                                .fetchTransactions(),
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(8.0),
-                              itemCount: transactionsState.transactions.length,
-                              itemBuilder: (context, index) {
-                                final tx =
-                                    transactionsState.transactions[index];
-                                return TransactionCard(
-                                  transaction: tx,
-                                  onTap: () => _navigateToEditTransaction(
-                                      context, ref, tx),
-                                );
-                              },
-                            ),
-                          ),
-          ),
-        ],
+      child: SafeArea(
+        child: Column(
+          children: [
+            _SummaryHeader(),
+            Container(height: 0.5, color: AppColors.separator),
+            _FilterRow(),
+            Container(height: 0.5, color: AppColors.separator),
+            Expanded(child: _TransactionList()),
+          ],
+        ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddOptions(context),
-        label: const Text('Yeni İşlem Ekle'),
-        icon: const Icon(Icons.add),
-        backgroundColor: Colors.teal.shade700,
-      ),
-    );
-  }
-
-  void _navigateToEditTransaction(
-      BuildContext context, WidgetRef ref, TransactionModel transaction) {
-    Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-          builder: (context) =>
-              TransactionFlowScreen(transactionToEdit: transaction)),
     );
   }
 
   void _showAddOptions(BuildContext context) {
-    showModalBottomSheet(
+    showCupertinoModalPopup(
       context: context,
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text("Nasıl İşlem Eklemek İstersiniz?",
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 20),
-              ListTile(
-                leading: Icon(Icons.swap_horiz_rounded,
-                    size: 30, color: Colors.blue.shade700),
-                title: const Text('Hesaplar Arası Transfer'),
-                subtitle: const Text('Hesaplarınız arasında para aktarın.'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const TransferFormScreen()));
-                },
-              ),
-              const Divider(),
-              ListTile(
-                leading: Icon(Icons.edit_note,
-                    size: 30, color: Colors.purple.shade700),
-                title: const Text('Manuel Giriş'),
-                subtitle: const Text('Tek bir işlemi adımlarla ekleyin.'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const TransactionFlowScreen()));
-                },
-              ),
-              const Divider(),
-              ListTile(
-                leading: Icon(Icons.auto_awesome,
-                    size: 30, color: Colors.orange.shade700),
-                title: const Text('AI ile Hızlı Giriş'),
-                subtitle:
-                    const Text('Birden çok işlemi metin yazarak ekleyin.'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const BatchTransactionScreen()));
-                },
-              ),
-            ],
+      builder: (_) => CupertinoActionSheet(
+        title: const Text('Nasıl İşlem Eklemek İstersiniz?'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => const TransferFormScreen()),
+              );
+            },
+            child: const Text('Hesaplar Arası Transfer'),
           ),
-        );
-      },
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => const TransactionFlowScreen()),
+              );
+            },
+            child: const Text('Manuel Giriş'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => const BatchTransactionScreen()),
+              );
+            },
+            child: const Text('AI ile Hızlı Giriş'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('İptal'),
+        ),
+      ),
     );
   }
 }
 
-class _HeaderSection extends ConsumerWidget {
+// ── Özet Başlık ───────────────────────────────────────────────────────────────
+
+class _SummaryHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(transactionsProvider);
-    final accounts = ref.watch(accountsProvider);
-    final theme = Theme.of(context);
-    final numberFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+    final fmt   = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
 
     return Container(
-      padding: const EdgeInsets.all(12.0),
-      color: theme.scaffoldBackgroundColor,
-      child: Column(
+      color: AppColors.surfaceDark,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildSummaryItem('Gelir', numberFormat.format(state.totalIncome),
-                  Colors.green.shade700, theme),
-              _buildSummaryItem(
-                  'Gider',
-                  numberFormat.format(state.totalExpense),
-                  theme.colorScheme.error,
-                  theme),
-              _buildSummaryItem(
-                  'Net',
-                  numberFormat.format(state.totalIncome - state.totalExpense),
-                  Colors.blue.shade800,
-                  theme),
-            ],
+          _SummaryItem(
+            label: 'Gelir',
+            value: fmt.format(state.totalIncome),
+            color: AppColors.incomeGreen,
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: _DateFilterChip(),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 3,
-                child: accounts.when(
-                  data: (accList) => DropdownButtonFormField<String?>(
-                    value: state.filterAccount,
-                    decoration: const InputDecoration(
-                        labelText: 'Hesap',
-                        border: OutlineInputBorder(),
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                    isExpanded: true,
-                    hint: const Text("Tüm Hesaplar"),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                          value: null, child: Text("Tüm Hesaplar")),
-                      ...accList.map((a) => DropdownMenuItem(
-                          value: a.accountName,
-                          child: Text(
-                            a.accountName,
-                            overflow: TextOverflow.ellipsis,
-                          )))
-                    ],
-                    onChanged: (value) {
-                      ref
-                          .read(transactionsProvider.notifier)
-                          .setAccountFilter(value);
-                    },
-                  ),
-                  loading: () => const SizedBox(),
-                  error: (e, s) => const Text("Hesaplar yüklenemedi"),
-                ),
-              ),
-            ],
+          _Divider(),
+          _SummaryItem(
+            label: 'Gider',
+            value: fmt.format(state.totalExpense),
+            color: AppColors.danger,
+          ),
+          _Divider(),
+          _SummaryItem(
+            label: 'Net',
+            value: fmt.format(state.totalIncome - state.totalExpense),
+            color: AppColors.primaryBlue,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSummaryItem(
-      String label, String value, Color color, ThemeData theme) {
+class _SummaryItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _SummaryItem({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         Text(label,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: Colors.grey.shade700)),
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
         const SizedBox(height: 4),
         Text(value,
-            style: theme.textTheme.titleMedium
-                ?.copyWith(color: color, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: color, fontSize: 15, fontWeight: FontWeight.w700)),
       ],
     );
   }
 }
 
-class _DateFilterChip extends ConsumerWidget {
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 0.5, height: 36, color: AppColors.separator);
+  }
+}
+
+// ── Filtre Satırı ─────────────────────────────────────────────────────────────
+
+class _FilterRow extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state    = ref.watch(transactionsProvider);
+    final notifier = ref.read(transactionsProvider.notifier);
+    final accounts = ref.watch(accountsProvider);
+
+    final now            = DateTime.now();
+    final startOfMonth   = DateTime(now.year, now.month, 1);
+    final isThisMonth    = state.startDate.year == startOfMonth.year &&
+        state.startDate.month == startOfMonth.month &&
+        state.startDate.day == startOfMonth.day;
+    final dateLabel = isThisMonth
+        ? 'Bu Ay'
+        : '${DateFormat.MMMd('tr').format(state.startDate)} – ${DateFormat.MMMd('tr').format(state.endDate)}';
+
+    return Container(
+      color: AppColors.surfaceDark,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          // Tarih filtresi
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            color: AppColors.surfaceGlass,
+            borderRadius: BorderRadius.circular(20),
+            onPressed: () => _pickDateRange(context, ref, state, notifier),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(CupertinoIcons.calendar, size: 14, color: AppColors.primaryBlue),
+                const SizedBox(width: 6),
+                Text(dateLabel,
+                    style: const TextStyle(
+                        color: AppColors.textPrimary, fontSize: 13)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Hesap filtresi
+          Expanded(
+            child: accounts.when(
+              data: (list) => CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                color: AppColors.surfaceGlass,
+                borderRadius: BorderRadius.circular(20),
+                onPressed: () => _pickAccount(context, ref, list, state, notifier),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(CupertinoIcons.creditcard, size: 14, color: AppColors.primaryBlue),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        state.filterAccount ?? 'Tüm Hesaplar',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: AppColors.textPrimary, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              loading: () => const SizedBox(),
+              error: (_, __) => const SizedBox(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _pickDateRange(BuildContext context, WidgetRef ref,
+      dynamic state, dynamic notifier) {
+    DateTime tempStart = state.startDate;
+    DateTime tempEnd   = state.endDate;
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) => Container(
+        height: 320,
+        color: const Color(0xFF1C1C1E),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  child: const Text('İptal',
+                      style: TextStyle(color: AppColors.textSecondary)),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                const Text('Başlangıç Tarihi',
+                    style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600)),
+                CupertinoButton(
+                  child: const Text('Uygula',
+                      style: TextStyle(color: AppColors.primaryBlue)),
+                  onPressed: () {
+                    notifier.setDateRange(tempStart, tempEnd);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: tempStart,
+                maximumDate: DateTime.now(),
+                minimumDate: DateTime(2000),
+                onDateTimeChanged: (d) => tempStart = d,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _pickAccount(BuildContext context, WidgetRef ref, List<dynamic> accounts,
+      dynamic state, dynamic notifier) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) => CupertinoActionSheet(
+        title: const Text('Hesap Seç'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              notifier.setAccountFilter(null);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Tüm Hesaplar'),
+          ),
+          ...accounts.map((a) => CupertinoActionSheetAction(
+                onPressed: () {
+                  notifier.setAccountFilter(a.accountName);
+                  Navigator.of(context).pop();
+                },
+                child: Text(a.accountName),
+              )),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('İptal'),
+        ),
+      ),
+    );
+  }
+}
+
+// ── İşlem Listesi ─────────────────────────────────────────────────────────────
+
+class _TransactionList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(transactionsProvider);
-    final notifier = ref.read(transactionsProvider.notifier);
 
-    String getChipLabel() {
-      final now = DateTime.now();
-      final startOfThisMonth = DateTime(now.year, now.month, 1);
-      if (state.startDate.year == startOfThisMonth.year &&
-          state.startDate.month == startOfThisMonth.month &&
-          state.startDate.day == startOfThisMonth.day) {
-        return "Bu Ay";
-      }
-      return "${DateFormat.yMd('tr').format(state.startDate)} - ${DateFormat.yMd('tr').format(state.endDate)}";
+    if (state.isLoading && state.transactions.isEmpty) {
+      return const Center(child: CupertinoActivityIndicator(radius: 14));
+    }
+    if (state.error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Hata: ${state.error}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.danger, fontSize: 14)),
+        ),
+      );
+    }
+    if (state.transactions.isEmpty) {
+      return const Center(
+        child: Text('Seçili kriterlere uygun işlem bulunamadı.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+      );
     }
 
-    return ActionChip(
-      avatar: const Icon(Icons.calendar_today, size: 16),
-      label: Text(getChipLabel()),
-      onPressed: () async {
-        final picked = await showDateRangePicker(
-          context: context,
-          initialDateRange:
-              DateTimeRange(start: state.startDate, end: state.endDate),
-          firstDate: DateTime(2000),
-          lastDate: DateTime.now().add(const Duration(days: 365)),
-          locale: const Locale('tr', 'TR'),
-        );
-        if (picked != null) {
-          notifier.setDateRange(picked.start, picked.end);
-        }
-      },
+    return CustomScrollView(
+      slivers: [
+        CupertinoSliverRefreshControl(
+          onRefresh: () =>
+              ref.read(transactionsProvider.notifier).fetchTransactions(),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(12),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) {
+                final tx = state.transactions[i];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: TransactionCard(
+                    transaction: tx,
+                    onTap: () => Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (_) =>
+                            TransactionFlowScreen(transactionToEdit: tx),
+                      ),
+                    ),
+                  ),
+                );
+              },
+              childCount: state.transactions.length,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
