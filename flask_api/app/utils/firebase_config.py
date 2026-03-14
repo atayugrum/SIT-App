@@ -36,8 +36,9 @@ def initialize_firebase_admin():
     except Exception as e:
         print(f"KRİTİK HATA: Firebase Admin SDK başlatılamadı: {e}")
         traceback.print_exc()
-        return None
+        raise RuntimeError(f"Firebase başlatma başarısız: {e}") from e
 
-# Diğer servislerin doğrudan 'db' nesnesini import edebilmesi için, 
+# Diğer servislerin doğrudan 'db' nesnesini import edebilmesi için,
 # bu modül ilk yüklendiğinde başlatma fonksiyonunu çağırıp db değişkenini ayarlıyoruz.
+# Hata durumunda uygulama başlamadan çöker — 'db=None' ile sessizce çalışmaz.
 db = initialize_firebase_admin()

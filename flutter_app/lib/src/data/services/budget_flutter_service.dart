@@ -1,5 +1,6 @@
 // File: lib/src/data/services/budget_flutter_service.dart
 import 'dart:convert';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -10,7 +11,6 @@ import '../../presentation/providers/auth_providers.dart';
 
 class BudgetFlutterService {
   final Ref _ref;
-  static const String _baseUrl = 'https://sit-app-production.up.railway.app';
   final _logger = Logger();
 
   BudgetFlutterService(this._ref);
@@ -23,7 +23,7 @@ class BudgetFlutterService {
        return [];
     }
     
-    final uri = Uri.parse('$_baseUrl/api/budgets?userId=$_userId&year=$year&month=$month');
+    final uri = Uri.parse('${ApiConstants.baseUrl}/api/budgets?userId=$_userId&year=$year&month=$month');
     _logger.i("Listing budgets from: $uri");
 
     try {
@@ -54,7 +54,7 @@ class BudgetFlutterService {
   }
 
   Future<BudgetModel> createOrUpdateBudget(BudgetModel budget) async {
-    final uri = Uri.parse('$_baseUrl/api/budgets');
+    final uri = Uri.parse('${ApiConstants.baseUrl}/api/budgets');
     // --- HATA DÜZELTMESİ BURADA ---
     // 'budget.categoryName' yerine modeldeki doğru alan adı olan 'budget.category' kullanıldı.
     _logger.i("Creating/updating budget for category: ${budget.category}");
@@ -94,7 +94,7 @@ class BudgetFlutterService {
   Future<void> deleteBudget(String budgetId) async {
     if (_userId == null) throw Exception("User not authenticated.");
     
-    final uri = Uri.parse('$_baseUrl/api/budgets/$budgetId?userId=$_userId');
+    final uri = Uri.parse('${ApiConstants.baseUrl}/api/budgets/$budgetId?userId=$_userId');
     _logger.i("Deleting budget: $budgetId");
 
     try {

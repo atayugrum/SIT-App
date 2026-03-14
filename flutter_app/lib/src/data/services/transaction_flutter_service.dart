@@ -1,5 +1,6 @@
 // File: lib/src/data/services/transaction_flutter_service.dart
 import 'dart:convert';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -7,7 +8,6 @@ import 'package:logger/logger.dart';
 import '../models/transaction_model.dart';
 
 
-const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
 
 class TransactionFlutterService {
   final String? _userId; // Bu userId'nin hala bir şekilde sağlanması gerekiyor.
@@ -31,7 +31,7 @@ class TransactionFlutterService {
     if (_userId == null) throw Exception("User not logged in.");
     transferData['userId'] = _userId;
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions/transfer');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/transactions/transfer');
     _logger.i("Creating transfer...");
 
     try {
@@ -64,7 +64,7 @@ class TransactionFlutterService {
     if (type != null) queryParams['type'] = type;
     if (account != null) queryParams['account'] = account;
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions').replace(queryParameters: queryParams);
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/transactions').replace(queryParameters: queryParams);
     _logger.i("Listing transactions from $url");
 
     try {
@@ -99,7 +99,7 @@ class TransactionFlutterService {
     // Token alma kısmı kaldırıldı.
     if (_userId == null) throw Exception("Kullanıcı ID'si bulunamadı.");
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/transactions');
     _logger.i("Creating transaction for user: $_userId");
 
     try {
@@ -140,7 +140,7 @@ class TransactionFlutterService {
   }
 
   Future<TransactionModel> updateTransaction(String id, TransactionModel transaction) async {
-    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions/$id');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/transactions/$id');
     _logger.i("Updating transaction $id");
 
     try {
@@ -177,7 +177,7 @@ class TransactionFlutterService {
   Future<void> deleteTransaction(String id) async {
     if (_userId == null) throw Exception("User not logged in.");
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/transactions/$id?userId=$_userId');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/transactions/$id?userId=$_userId');
     _logger.i("Deleting transaction $id");
 
     try {

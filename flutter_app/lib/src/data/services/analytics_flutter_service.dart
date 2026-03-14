@@ -1,5 +1,6 @@
 // File: lib/src/data/services/analytics_flutter_service.dart
 import 'dart:convert';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -10,7 +11,6 @@ import '../../presentation/providers/auth_providers.dart';
 
 class AnalyticsFlutterService {
   final Ref _ref;
-  static const String _baseUrl = 'https://sit-app-production.up.railway.app';
   final _logger = Logger();
 
   AnalyticsFlutterService(this._ref);
@@ -22,7 +22,7 @@ class AnalyticsFlutterService {
       getV2Analytics() async {
     if (_userId == null) throw Exception("User not logged in");
 
-    final url = Uri.parse('$_baseUrl/api/analytics/v2/dashboard?userId=$_userId');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/analytics/v2/dashboard?userId=$_userId');
     _logger.i("Getting v2 analytics...");
 
     try {
@@ -59,7 +59,7 @@ class AnalyticsFlutterService {
     if (_userId == null) throw Exception("User not logged in");
 
     final url = Uri.parse(
-        '$_baseUrl/api/analytics/category-comparison?userId=$_userId&category=${Uri.encodeComponent(category)}');
+        '${ApiConstants.baseUrl}/api/analytics/category-comparison?userId=$_userId&category=${Uri.encodeComponent(category)}');
     _logger.i("Getting category comparison for $category...");
 
     try {

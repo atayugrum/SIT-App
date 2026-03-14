@@ -1,5 +1,6 @@
 // File: lib/src/data/services/account_flutter_service.dart
 import 'dart:convert';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -9,7 +10,6 @@ import '../models/account_model.dart';
 import '../../presentation/providers/auth_providers.dart';
 
 class AccountFlutterService {
-  static const String _baseUrl = 'https://sit-app-production.up.railway.app';
   final Ref _ref;
   final _logger = Logger();
 
@@ -30,7 +30,7 @@ class AccountFlutterService {
       return [];
     }
 
-    final url = Uri.parse('$_baseUrl/api/accounts').replace(queryParameters: {'userId': _userId});
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/accounts').replace(queryParameters: {'userId': _userId});
     _logger.i("Listing accounts from: $url");
 
     try {
@@ -59,7 +59,7 @@ class AccountFlutterService {
     if (_userId == null) throw Exception("User not logged in.");
     accountData['userId'] = _userId;
 
-    final url = Uri.parse('$_baseUrl/api/accounts');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/accounts');
     _logger.i("Creating account at: $url");
 
     try {
@@ -90,7 +90,7 @@ class AccountFlutterService {
   }
 
   Future<void> updateAccount(String accountId, Map<String, dynamic> accountData) async {
-    final url = Uri.parse('$_baseUrl/api/accounts/$accountId');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/accounts/$accountId');
     _logger.i("Updating account at: $url");
     try {
       final response = await http.put(
@@ -115,7 +115,7 @@ class AccountFlutterService {
   }
 
   Future<void> archiveAccount(String accountId) async {
-    final url = Uri.parse('$_baseUrl/api/accounts/$accountId');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/accounts/$accountId');
     _logger.i("Archiving account at: $url");
     try {
       final response = await http.delete(url).timeout(const Duration(seconds: 60));

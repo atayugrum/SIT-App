@@ -1,5 +1,6 @@
 // File: lib/src/data/services/savings_flutter_service.dart
 import 'dart:convert';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -12,7 +13,6 @@ import '../models/savings_balance_model.dart';
 import '../models/savings_goal_model.dart';
 
 class SavingsFlutterService {
-  static const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
   final Ref _ref;
   final _logger = Logger();
 
@@ -37,7 +37,7 @@ class SavingsFlutterService {
       _logger.w("User not logged in. Cannot fetch savings balance.");
       throw Exception("User not logged in.");
     }
-    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/balance').replace(queryParameters: {'userId': _userId});
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/savings/balance').replace(queryParameters: {'userId': _userId});
     _logger.i("Fetching savings balance from $url");
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 60));
@@ -74,7 +74,7 @@ class SavingsFlutterService {
     if (endDate != null) queryParams['endDate'] = endDate;
     if (source != null) queryParams['source'] = source;
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/allocations').replace(queryParameters: queryParams);
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/savings/allocations').replace(queryParameters: queryParams);
     _logger.i("Listing savings allocations from: $url");
     
     try {
@@ -110,7 +110,7 @@ class SavingsFlutterService {
       'userId': _userId, 'amount': amount, 'date': DateFormat('yyyy-MM-dd').format(date),
     };
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/allocations');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/savings/allocations');
     _logger.i("Adding manual saving...");
 
     try {
@@ -131,7 +131,7 @@ class SavingsFlutterService {
 
   Future<List<SavingsGoalModel>> listGoals() async {
     if (_userId == null) throw Exception("User not logged in.");
-    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals').replace(queryParameters: {'userId': _userId});
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/savings/goals').replace(queryParameters: {'userId': _userId});
     _logger.i("Listing savings goals from $url");
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 60));
@@ -159,7 +159,7 @@ class SavingsFlutterService {
 
   Future<SavingsGoalModel> createGoal({required String title, required double targetAmount, required DateTime targetDate}) async {
     if (_userId == null) throw Exception("User not logged in.");
-    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/savings/goals');
     final payload = jsonEncode({
       'userId': _userId, 'title': title, 'targetAmount': targetAmount,
       'targetDate': DateFormat('yyyy-MM-dd').format(targetDate),
@@ -186,7 +186,7 @@ class SavingsFlutterService {
 
   Future<void> deleteGoal(String goalId) async {
     if (_userId == null) throw Exception("User not logged in.");
-    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals/$goalId').replace(queryParameters: {'userId': _userId});
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/savings/goals/$goalId').replace(queryParameters: {'userId': _userId});
     _logger.i("Deleting savings goal $goalId");
     
     try {
@@ -205,7 +205,7 @@ class SavingsFlutterService {
 
   Future<void> allocateToGoal({required String goalId, required double amount}) async {
     if (_userId == null) throw Exception("User not logged in.");
-    final url = Uri.parse('$_flaskApiBaseUrl/api/savings/goals/$goalId/allocate');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/savings/goals/$goalId/allocate');
     final payload = jsonEncode({'userId': _userId, 'amount': amount});
     _logger.i("Allocating $amount to goal $goalId");
 

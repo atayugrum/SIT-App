@@ -1,12 +1,12 @@
 // File: lib/src/data/services/profile_service.dart
 import 'dart:convert';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import '../models/user_profile_model.dart';
 
 class ProfileService {
-  static const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
   final _logger = Logger();
 
   Future<UserProfile> getUserProfile(String uid) async {
@@ -17,7 +17,7 @@ class ProfileService {
 
     final cacheBuster = DateTime.now().millisecondsSinceEpoch;
     final url =
-        Uri.parse('$_flaskApiBaseUrl/api/users/$uid/profile?_=$cacheBuster');
+        Uri.parse('${ApiConstants.baseUrl}/api/users/$uid/profile?_=$cacheBuster');
 
     _logger.i("Fetching profile from: $url");
     try {
@@ -60,7 +60,7 @@ class ProfileService {
       _logger.w("Attempted to update profile with empty UID.");
       throw ArgumentError('Kullanıcı ID (uid) boş olamaz.');
     }
-    final url = Uri.parse('$_flaskApiBaseUrl/api/users/$uid/profile');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/users/$uid/profile');
     _logger.i("Updating profile for UID $uid at: $url");
     _logger.d("Update data: $updates");
 
@@ -118,7 +118,7 @@ class ProfileService {
       _logger.w("Attempted to delete account with empty UID.");
       throw ArgumentError('Kullanıcı ID (uid) boş olamaz.');
     }
-    final url = Uri.parse('$_flaskApiBaseUrl/api/users/$uid');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/users/$uid');
     _logger.i("Sending DELETE request for user UID $uid to: $url");
 
     try {

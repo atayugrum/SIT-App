@@ -50,6 +50,11 @@ def create_app():
     # DÜZELTİLMİŞ KISIM: ai_bp'yi url_prefix OLMADAN kaydedin
     app.register_blueprint(ai_bp)
     
+    @app.route('/')
+    def health_check():
+        from flask import jsonify
+        return jsonify({"status": "API is running", "version": "1.0"})
+
     @app.route('/hello')
     def hello():
         return "Hello from SIT App Flask API!"

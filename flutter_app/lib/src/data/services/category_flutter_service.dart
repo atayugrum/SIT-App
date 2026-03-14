@@ -1,5 +1,6 @@
 // File: flutter_app/lib/src/data/services/category_flutter_service.dart
 import 'dart:convert';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -9,7 +10,6 @@ import '../../presentation/providers/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class CategoryFlutterService {
-  static const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
   final Ref _ref;
   final _logger = Logger(printer: PrettyPrinter(methodCount: 1, errorMethodCount: 5));
 
@@ -24,7 +24,7 @@ class CategoryFlutterService {
     }
 
     final Map<String, dynamic> categoryDataForApi = category.toMapForApi()..['userId'] = _userId;
-    final url = Uri.parse('$_flaskApiBaseUrl/api/categories');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/categories');
     _logger.i("Creating category at $url");
     _logger.d("Category data for API: ${jsonEncode(categoryDataForApi)}");
 
@@ -75,7 +75,7 @@ class CategoryFlutterService {
       queryParams['type'] = categoryType;
     }
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/categories').replace(queryParameters: queryParams);
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/categories').replace(queryParameters: queryParams);
     _logger.i("Listing categories from $url");
 
     try {
@@ -119,7 +119,7 @@ class CategoryFlutterService {
     
     final Map<String, dynamic> categoryUpdateData = category.toMapForApi()..['userId'] = _userId;
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/categories/$categoryId');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/categories/$categoryId');
     _logger.i("Updating category $categoryId at $url");
     _logger.d("Update data: ${jsonEncode(categoryUpdateData)}");
 
@@ -165,7 +165,7 @@ class CategoryFlutterService {
       throw Exception("User not logged in. Cannot delete category.");
     }
 
-    final url = Uri.parse('$_flaskApiBaseUrl/api/categories/$categoryId').replace(queryParameters: {'userId': _userId});
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/categories/$categoryId').replace(queryParameters: {'userId': _userId});
     _logger.i("Deleting category $categoryId at $url");
 
     try {

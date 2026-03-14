@@ -1,5 +1,6 @@
 // File: lib/src/data/services/ai_flutter_service.dart
 import 'dart:convert';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -8,11 +9,10 @@ import '../models/budget_suggestion_model.dart';
 import '../models/parsed_transaction_model.dart';
 
 class AIFlutterService {
-  static const String _baseUrl = 'https://sit-app-production.up.railway.app';
   final _logger = Logger();
 
   Future<BudgetSuggestion> getBudgetRecommendation(String userId, String category) async {
-    final uri = Uri.parse('$_baseUrl/api/ai/recommendations/budget')
+    final uri = Uri.parse('${ApiConstants.baseUrl}/api/ai/recommendations/budget')
         .replace(queryParameters: {'userId': userId, 'category': category});
     _logger.i("Getting budget recommendation for category: $category");
 
@@ -39,7 +39,7 @@ class AIFlutterService {
   }
 
   Future<List<ParsedTransactionModel>> parseTransactionText(String text) async {
-    final url = Uri.parse('$_baseUrl/api/ai/parse-text');
+    final url = Uri.parse('${ApiConstants.baseUrl}/api/ai/parse-text');
     final payload = jsonEncode({'text': text});
     _logger.i("Parsing transaction text...");
 

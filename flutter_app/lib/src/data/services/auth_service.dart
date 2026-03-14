@@ -1,5 +1,6 @@
 // File: flutter_app/lib/src/data/services/auth_service.dart
 import 'package:logger/logger.dart';
+import '../../core/network/api_constants.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,7 +9,6 @@ import 'dart:convert';
 
 class AuthService {
   final FirebaseAuth _firebaseAuth;
-  static const String _flaskApiBaseUrl = 'https://sit-app-production.up.railway.app';
   final _logger = Logger(
     printer: PrettyPrinter(methodCount: 1, errorMethodCount: 5),
   );
@@ -71,7 +71,7 @@ class AuthService {
         'username': username, 'birthDate': birthDateString, 'profileIconId': profileIconId,
       };
 
-      final apiUrl = '$_flaskApiBaseUrl/api/users/create_profile';
+      final apiUrl = '${ApiConstants.baseUrl}/api/users/create_profile';
       _logger.i("Calling Flask API at: $apiUrl with data: ${jsonEncode(profileData)}");
       
       final response = await http.post(
