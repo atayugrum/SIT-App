@@ -459,6 +459,134 @@ class AIService:
             return {"error": "Fırsatlar analiz edilirken bir hata oluştu."}
 
     @staticmethod
+    def get_spending_insights(user_id: str):
+        """
+        Kullanıcının son 30 günlük gider işlemlerini Firestore'dan çeker,
+        kategori bazlı trend ve anomali analizi yapar, Gemini ile yorumlar.
+        Döndürülen JSON: { "headline": str, "insights": [str], "actions": [str] }
+        """
+        if not AIService.client:
+            raise Exception("AI Service not available")
+
+        try:
+            now = datetime.now(timezone.utc)
+            start_30 = now - timedelta(days=30)
+            start_60 = now - timedelta(days=60)
+
+            def fetch_expenses(date_from, date_to):
+                return list(
+                    db.collection('transactions')
+                    .where(filter=FieldFilter("userId", "==", user_id))
+                    .where(filter=FieldFilter("isDeleted", "==", False))
+                    .where(filter=FieldFilter("type", "==", "expense"))
+                    .where(filter=FieldFilter("date", ">=", date_from.strftime('%Y-%m-%d')))
+                    .where(filter=FieldFilter("date", "<=", date_to.strftime('%Y-%m-%d')))
+                    .stream()
+                )
+
+            txs_current = fetch_expenses(start_30, now)
+            txs_prior   = fetch_expenses(start_60, start_30)
+
+            if not txs_current:
+                return {
+                    "headline": "Henüz analiz için yeterli veri yok.",
+                    "insights": ["Son 30 günde gider işlemi kaydedilmemiş."],
+                    "actions": [
+                        "İlk harcamanızı ekleyerek AI analizini başlatın.",
+                        "Bütçe hedeflerinizi belirleyin."
+                    ]
+                }
+
+            # Aggregate current period by category & week slot
+            cat_current  = {}
+            weekly       = {0: {}, 1: {}, 2: {}, 3: {}}
+            for doc in txs_current:
+                tx     = doc.to_dict()
+                cat    = tx.get('category', 'Diğer')
+                amount = float(tx.get('amount', 0))
+                days_ago = (now - datetime.strptime(tx['date'], '%Y-%m-%d').replace(tzinfo=timezone.utc)).days
+                wk = min(days_ago // 7, 3)
+                cat_current[cat] = cat_current.get(cat, 0) + amount
+                weekly[wk][cat]  = weekly[wk].get(cat, 0) + amount
+
+            # Aggregate prior period
+            cat_prior = {}
+            for doc in txs_prior:
+                tx     = doc.to_dict()
+                cat    = tx.get('category', 'Diğer')
+                cat_prior[cat] = cat_prior.get(cat, 0) + float(tx.get('amount', 0))
+
+            # Anomaly detection: categories with >30% increase vs prior period
+            anomalies = []
+            for cat, cur in cat_current.items():
+                prior = cat_prior.get(cat, 0)
+                if prior > 0:
+                    pct = ((cur - prior) / prior) * 100
+                    if pct > 30:
+                        anomalies.append({
+                            "kategori": cat,
+                            "onceki_donem": round(prior),
+                            "mevcut_donem": round(cur),
+                            "degisim_yuzdesi": round(pct)
+                        })
+
+            top_cats = sorted(
+                [{"kategori": k, "toplam": round(v)} for k, v in cat_current.items()],
+                key=lambda x: x["toplam"], reverse=True
+            )[:5]
+
+            payload = {
+                "toplam_gider_son_30_gun": round(sum(cat_current.values())),
+                "toplam_gider_onceki_30_gun": round(sum(cat_prior.values())),
+                "en_yuksek_harcama_kategorileri": top_cats,
+                "anomaliler": anomalies,
+                "haftalik_dagılım": {
+                    f"hafta_{i+1}_onceki": {k: round(v) for k, v in weekly[i].items()}
+                    for i in range(4)
+                }
+            }
+
+            prompt = f"""
+Sen SIT App kişisel finans uygulamasının yapay zeka finansal danışmanısın.
+Kullanıcının son 30 günlük harcama verileri aşağıda JSON formatında verilmektedir.
+
+VERİ:
+{json.dumps(payload, ensure_ascii=False, indent=2)}
+
+GÖREV:
+1. "headline": Tek cümlelik, çarpıcı ve veriyi özetleyen Türkçe başlık (anomali varsa mutlaka yansıt).
+2. "insights": 2-3 maddeli gözlem listesi. Her madde spesifik sayısal veri içermelidir.
+3. "actions": Tam 2 adet somut, rakam bazlı, uygulanabilir aksiyon adımı.
+
+KESİN KURALLAR:
+- Tüm metinler Türkçe.
+- ASLA "harcamalarına dikkat et" gibi soyut tavsiye verme.
+- Tüm TL tutarlarını ₺ sembolüyle yaz.
+- "insights" ve "actions" string listesi olmalı.
+
+ÇIKTI (yalnızca bu JSON yapısı):
+{{
+  "headline": "<tek cümle>",
+  "insights": ["<gözlem 1>", "<gözlem 2>"],
+  "actions": ["<aksiyon 1>", "<aksiyon 2>"]
+}}
+"""
+            config = types.GenerateContentConfig(
+                max_output_tokens=512,
+                response_mime_type="application/json",
+                temperature=0.4
+            )
+            response = AIService.client.models.generate_content(
+                model=AIService.MODEL_NAME, contents=prompt, config=config
+            )
+            clean = re.sub(r'```json\s*|\s*```', '', response.text.strip())
+            return json.loads(clean)
+
+        except Exception as e:
+            traceback.print_exc()
+            raise Exception(f"Harcama içgörüsü alınamadı: {str(e)}")
+
+    @staticmethod
     def parse_transaction_text(text: str):
         if not text.strip():
             return {"success": True, "parsedTransactions": []}

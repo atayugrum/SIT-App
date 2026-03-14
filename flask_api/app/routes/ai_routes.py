@@ -27,6 +27,17 @@ def get_budget_recommendation_route():
     except Exception as e:
         return jsonify({"success": False, "error": f"Bütçe önerisi alınırken bir hata oluştu: {str(e)}"}), 500
 
+@ai_bp.route('/insights/home', methods=['GET'])
+def get_home_insights_route():
+    user_id = request.args.get('userId')
+    if not user_id:
+        return jsonify({"success": False, "error": "userId parametresi zorunludur."}), 400
+    try:
+        result = AIService.get_spending_insights(user_id)
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @ai_bp.route('/indicator-info/<string:indicator_key>', methods=['GET'])
 def get_indicator_info_route(indicator_key):
     current_value_str = request.args.get('value')

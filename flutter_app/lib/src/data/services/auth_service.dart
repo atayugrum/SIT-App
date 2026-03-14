@@ -118,6 +118,23 @@ class AuthService {
     }
   }
 
+  /// Mevcut Firebase kullanıcısının ID token'ını alır ve Authorization header
+  /// olarak döndürür. Tüm servisler bu helper'ı kullanarak backend isteklerini
+  /// güvenli hale getirir.
+  static Future<Map<String, String>> authHeaders() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return const {'Content-Type': 'application/json'};
+      final token = await user.getIdToken();
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+    } catch (_) {
+      return const {'Content-Type': 'application/json'};
+    }
+  }
+
   Future<void> signOut() async {
     try {
       _logger.i("Attempting signOut.");

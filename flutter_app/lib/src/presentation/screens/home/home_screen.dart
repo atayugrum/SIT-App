@@ -1,5 +1,6 @@
 // File: lib/src/presentation/screens/home/home_screen.dart
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -9,6 +10,7 @@ import '../../providers/auth_providers.dart';
 import '../../providers/profile_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/cupertino_ai_insight_card.dart';
 import '../transactions/transactions_screen.dart';
 import '../savings/savings_overview_screen.dart';
 import '../balance/balance_overview_screen.dart';
@@ -75,6 +77,10 @@ class HomeScreen extends ConsumerWidget {
                     onRetry: () => ref.invalidate(analyticsV2Provider),
                   ),
                 ),
+                const SizedBox(height: 20),
+
+                // ── AI İçgörü Kartı ──────────────────────────────────────────
+                const CupertinoAIInsightCard(),
                 const SizedBox(height: 28),
 
                 // ── Hızlı Erişim Modül Izgara ───────────────────────────────
@@ -211,6 +217,7 @@ class _QuickAccessGrid extends StatelessWidget {
   }
 
   void _push(BuildContext context, Widget screen) {
+    HapticFeedback.lightImpact();
     Navigator.of(context).push(
       CupertinoPageRoute(builder: (_) => screen),
     );

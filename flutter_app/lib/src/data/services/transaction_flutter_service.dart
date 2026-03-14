@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import '../models/transaction_model.dart';
+import 'auth_service.dart';
 
 
 
@@ -35,9 +36,10 @@ class TransactionFlutterService {
     _logger.i("Creating transfer...");
 
     try {
+      final headers = await AuthService.authHeaders();
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode(transferData),
       ).timeout(const Duration(seconds: 60));
 
@@ -68,7 +70,8 @@ class TransactionFlutterService {
     _logger.i("Listing transactions from $url");
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 60));
+      final headers = await AuthService.authHeaders();
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
@@ -103,12 +106,10 @@ class TransactionFlutterService {
     _logger.i("Creating transaction for user: $_userId");
 
     try {
+      final headers = await AuthService.authHeaders();
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          // Authorization başlığı kaldırıldı.
-        },
+        headers: headers,
         body: json.encode(transaction.toMap()),
       ).timeout(const Duration(seconds: 60));
 
@@ -144,10 +145,11 @@ class TransactionFlutterService {
     _logger.i("Updating transaction $id");
 
     try {
+      final headers = await AuthService.authHeaders();
       final response = await http.put(
         url,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(transaction.toMapForUpdate())
+        headers: headers,
+        body: json.encode(transaction.toMapForUpdate()),
       ).timeout(const Duration(seconds: 60));
 
       final responseData = json.decode(response.body);
@@ -181,7 +183,8 @@ class TransactionFlutterService {
     _logger.i("Deleting transaction $id");
 
     try {
-      final response = await http.delete(url).timeout(const Duration(seconds: 60));
+      final headers = await AuthService.authHeaders();
+      final response = await http.delete(url, headers: headers).timeout(const Duration(seconds: 60));
       final responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {

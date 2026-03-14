@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import '../models/user_profile_model.dart';
+import 'auth_service.dart';
 
 class ProfileService {
   final _logger = Logger();
@@ -21,7 +22,8 @@ class ProfileService {
 
     _logger.i("Fetching profile from: $url");
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 60));
+      final headers = await AuthService.authHeaders();
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 60));
       _logger.d("Response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
@@ -65,12 +67,9 @@ class ProfileService {
     _logger.d("Update data: $updates");
 
     try {
+      final headers = await AuthService.authHeaders();
       final response = await http
-          .put(
-            url,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(updates),
-          )
+          .put(url, headers: headers, body: jsonEncode(updates))
           .timeout(const Duration(seconds: 60));
 
       _logger.d("Update response status: ${response.statusCode}");
@@ -122,14 +121,10 @@ class ProfileService {
     _logger.i("Sending DELETE request for user UID $uid to: $url");
 
     try {
-      final response = await http.delete(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          // NOT: Eğer API'niz token bazlı koruma gerektiriyorsa,
-          // 'Authorization': 'Bearer <token>' header'ını burada eklemelisiniz.
-        },
-      ).timeout(const Duration(seconds: 60));
+      final headers = await AuthService.authHeaders();
+      final response = await http
+          .delete(url, headers: headers)
+          .timeout(const Duration(seconds: 60));
 
       _logger.d("Delete response status: ${response.statusCode}");
 

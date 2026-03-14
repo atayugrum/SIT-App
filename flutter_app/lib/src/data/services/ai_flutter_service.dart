@@ -38,6 +38,30 @@ class AIFlutterService {
     }
   }
 
+  Future<Map<String, dynamic>> getHomeInsights(String userId) async {
+    final uri = Uri.parse('${ApiConstants.baseUrl}/api/ai/insights/home')
+        .replace(queryParameters: {'userId': userId});
+    _logger.i("Fetching AI home insights for user: $userId");
+    try {
+      final response =
+          await http.get(uri).timeout(const Duration(seconds: 45));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      final err = jsonDecode(response.body);
+      throw Exception(err['error'] ?? 'İçgörü alınamadı.');
+    } on SocketException catch (e, s) {
+      _logger.e('Network error on getHomeInsights', error: e, stackTrace: s);
+      throw Exception('İnternet bağlantısı yok.');
+    } on TimeoutException catch (e, s) {
+      _logger.e('Timeout on getHomeInsights', error: e, stackTrace: s);
+      throw Exception('AI servisi yanıt vermedi, lütfen tekrar deneyin.');
+    } catch (e, s) {
+      _logger.e('Generic error on getHomeInsights', error: e, stackTrace: s);
+      rethrow;
+    }
+  }
+
   Future<List<ParsedTransactionModel>> parseTransactionText(String text) async {
     final url = Uri.parse('${ApiConstants.baseUrl}/api/ai/parse-text');
     final payload = jsonEncode({'text': text});

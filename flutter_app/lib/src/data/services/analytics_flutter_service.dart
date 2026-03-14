@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../models/analytics_models.dart';
 import '../../presentation/providers/auth_providers.dart';
+import 'auth_service.dart';
 
 class AnalyticsFlutterService {
   final Ref _ref;
@@ -26,7 +27,8 @@ class AnalyticsFlutterService {
     _logger.i("Getting v2 analytics...");
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 60));
+      final headers = await AuthService.authHeaders();
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -63,7 +65,8 @@ class AnalyticsFlutterService {
     _logger.i("Getting category comparison for $category...");
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 60));
+      final headers = await AuthService.authHeaders();
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['data'] != null) {
